@@ -26,6 +26,9 @@ func TestAdministratorHasManagementPowersButNoOtherUsersAccountData(t *testing.T
 		t.Fatal(err)
 	}
 	_ = s.AddLogForUser(member.ID, "task", "OTHER-PRIVATE-LOG")
+	if err := s.AddTaskLogForUser(member.ID, other.ID, "OTHER-PRIVATE-RUN", "bbs", "OTHER-PRIVATE-TASK-DETAIL"); err != nil {
+		t.Fatal(err)
+	}
 	server := NewServer(s)
 	defer server.Stop()
 	h := server.Handler()

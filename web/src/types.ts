@@ -33,7 +33,7 @@ export interface Config {
   captcha: { max_retries: number; channels: CaptchaChannel[] }
   shop_exchange: { enable: boolean; retry_seconds: number; retry_interval: number; plans: ExchangePlan[] }
 }
-export interface LogEntry { at: string; component: string; message: string }
+export interface LogEntry { at: string; component: string; message: string; account_id?: string; run_id?: string }
 export interface SchedulerStatus {
   enabled: boolean
   running: boolean

@@ -334,6 +334,8 @@ type LogEntry struct {
 	Component string    `json:"component"`
 	Message   string    `json:"message"`
 	UserID    string    `json:"user_id,omitempty"`
+	AccountID string    `json:"account_id,omitempty"`
+	RunID     string    `json:"run_id,omitempty"`
 }
 
 type AuthStatus struct {
