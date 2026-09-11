@@ -19,7 +19,7 @@ type Runner struct {
 	Notify    func(notify.Event) bool
 	store     *store.Store
 	mu        sync.Mutex
-	running   map[string]context.CancelFunc
+	running   map[string]context.CancelCauseFunc
 	contexts  map[string]context.Context
 	progress  map[string]model.TaskProgress
 	batches   map[string]context.CancelFunc
@@ -29,7 +29,7 @@ type Runner struct {
 }
 
 func NewRunner(s *store.Store) *Runner {
-	return &Runner{store: s, running: map[string]context.CancelFunc{}, contexts: map[string]context.Context{}, progress: map[string]model.TaskProgress{}, batches: map[string]context.CancelFunc{}, newClient: func() *mihoyo.Client { return mihoyo.NewClient("") }}
+	return &Runner{store: s, running: map[string]context.CancelCauseFunc{}, contexts: map[string]context.Context{}, progress: map[string]model.TaskProgress{}, batches: map[string]context.CancelFunc{}, newClient: func() *mihoyo.Client { return mihoyo.NewClient("") }}
 }
 
 var errNoTasks = errors.New("没有匹配且已启用的账号任务，请在账号的签到设置中选择任务")
@@ -88,10 +88,10 @@ func (r *Runner) begin(ctx context.Context, ids []string, filters ...RunOptions)
 	if len(accounts) == 0 {
 		return nil, nil, nil, errNoTasks
 	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	ctx, cancel := context.WithTimeoutCause(ctx, 30*time.Minute, errors.New("本批任务超过 30 分钟执行时限"))
 	reserved := map[string]context.Context{}
 	for _, a := range accounts {
-		accountCtx, stop := context.WithCancel(ctx)
+		accountCtx, stop := context.WithCancelCause(ctx)
 		r.running[a.ID] = stop
 		r.contexts[a.ID] = accountCtx
 		reserved[a.ID] = accountCtx
@@ -106,7 +106,7 @@ func (r *Runner) begin(ctx context.Context, ids []string, filters ...RunOptions)
 		defer r.mu.Unlock()
 		for id, accountCtx := range reserved {
 			if r.contexts[id] == accountCtx {
-				r.running[id]()
+				r.running[id](nil)
 				delete(r.running, id)
 				delete(r.contexts, id)
 				delete(r.progress, id)
@@ -164,6 +164,9 @@ func (r *Runner) end(accounts []model.Account, cancel context.CancelFunc) {
 func (r *Runner) Stop() {
 	r.mu.Lock()
 	r.stopped = true
+	for _, cancel := range r.running {
+		cancel(errors.New("服务正在重启或关闭"))
+	}
 	for _, cancel := range r.batches {
 		cancel()
 	}
@@ -200,7 +203,21 @@ func (r *Runner) run(ctx context.Context, accounts []model.Account, options RunO
 		}
 		allowed := func() bool {
 			latest, ok := r.store.AccountRunnable(account.ID)
-			return ok && r.store.Config().Enabled && latest.Cookie == account.Cookie && latest.Stoken == account.Stoken && latest.Device.ID == account.Device.ID && latest.TaskSettings != nil && account.TaskSettings != nil && latest.TaskSettings.Revision == account.TaskSettings.Revision
+			reason := ""
+			switch {
+			case !ok:
+				reason = "账号或所属用户已停用"
+			case !r.store.Config().Enabled:
+				reason = "管理员已关闭站点任务服务"
+			case latest.Cookie != account.Cookie || latest.Stoken != account.Stoken || latest.Device.ID != account.Device.ID:
+				reason = "账号登录凭据已变更"
+			case latest.TaskSettings == nil || account.TaskSettings == nil || !latest.TaskSettings.SameWork(account.TaskSettings):
+				reason = "签到项目或任务参数已修改"
+			}
+			if reason != "" {
+				r.CancelAccount(account.ID, reason)
+			}
+			return reason == "" && accountCtx.Err() == nil
 		}
 		client.HTTP.Transport = authorizedTransport{base: base, allowed: allowed}
 		captchaAllowed := cfg.Captcha.Allowed
@@ -241,6 +258,9 @@ func (r *Runner) run(ctx context.Context, accounts []model.Account, options RunO
 			r.updateProgress(a.ID, "running", label)
 			details := []string{}
 			result := run(func(message string) {
+				if accountCtx.Err() != nil {
+					message = strings.ReplaceAll(message, "context canceled", taskStopReason(accountCtx))
+				}
 				if len(details) < 200 {
 					details = append(details, message)
 				}
@@ -250,6 +270,9 @@ func (r *Runner) run(ctx context.Context, accounts []model.Account, options RunO
 				}
 			})
 			result.Details = details
+			if accountCtx.Err() != nil {
+				result.Status, result.Reason = "cancelled", "停止原因："+taskStopReason(accountCtx)
+			}
 			results[key] = result
 			failed += result.Failed
 		}
@@ -266,10 +289,10 @@ func (r *Runner) run(ctx context.Context, accounts []model.Account, options RunO
 			return err
 		}
 		if r.Notify != nil {
-			r.Notify(notify.TaskEvent(cfg, account, results, accountCtx.Err() != nil, time.Now()))
+			r.Notify(notify.TaskEvent(cfg, account, results, accountCtx.Err() != nil, time.Now(), taskStopReason(accountCtx)))
 		}
 		if accountCtx.Err() != nil {
-			emit("任务已停止，已完成的结果已保存")
+			emit("任务已停止：" + taskStopReason(accountCtx) + "；已执行部分的结果已保存")
 			r.updateProgress(a.ID, "cancelled", "已停止")
 		} else {
 			emit("任务执行结束")
@@ -287,7 +310,7 @@ func (r *Runner) releaseAccount(id string, ctx context.Context) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.contexts[id] == ctx {
-		r.running[id]()
+		r.running[id](nil)
 		delete(r.running, id)
 		delete(r.contexts, id)
 		delete(r.progress, id)
@@ -328,11 +351,29 @@ func (r *Runner) RunningForUser(u model.User) bool {
 	return false
 }
 
-func (r *Runner) CancelAccount(id string) {
+func (r *Runner) CancelAccount(id string, reason ...string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if cancel := r.running[id]; cancel != nil {
-		cancel()
+		message := "用户主动停止任务"
+		if len(reason) > 0 && reason[0] != "" {
+			message = reason[0]
+		}
+		cancel(errors.New(message))
+	}
+}
+
+func taskStopReason(ctx context.Context) string {
+	cause := context.Cause(ctx)
+	switch {
+	case cause == nil:
+		return ""
+	case errors.Is(cause, context.DeadlineExceeded):
+		return "任务超过执行时限"
+	case errors.Is(cause, context.Canceled):
+		return "任务已取消"
+	default:
+		return cause.Error()
 	}
 }
 

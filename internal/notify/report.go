@@ -23,7 +23,7 @@ type Event struct {
 	revision                int
 }
 
-func TaskEvent(cfg model.Config, account model.Account, results map[string]model.TaskSummary, cancelled bool, at time.Time) Event {
+func TaskEvent(cfg model.Config, account model.Account, results map[string]model.TaskSummary, cancelled bool, at time.Time, stopReason ...string) Event {
 	passed, failed, skipped := 0, 0, 0
 	var details []string
 	balanceWarning := false
@@ -71,7 +71,11 @@ func TaskEvent(cfg model.Config, account model.Account, results map[string]model
 		header += "\n本次没有新增成功操作，具体原因见下方。"
 	}
 	if cancelled {
-		header += "\n任务已停止，以下仅包含已完成阶段。"
+		header += "\n任务已停止"
+		if len(stopReason) > 0 && stopReason[0] != "" {
+			header += "：" + truncate(sanitize(stopReason[0], cfg, account), 150)
+		}
+		header += "。以下为已执行部分的结果。"
 	}
 	if balanceWarning {
 		header += "\n请充值验证码服务后再重试相关签到。"

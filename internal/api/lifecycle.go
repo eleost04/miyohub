@@ -1,7 +1,7 @@
 package api
 
 func (s *Server) cancelAccountWork(id string) {
-	s.runner.CancelAccount(id)
+	s.runner.CancelAccount(id, "账号凭据或所属用户的状态、权限已变更")
 	s.exchange.CancelAccount(id)
 }
 func (s *Server) cancelUserWork(id string) {

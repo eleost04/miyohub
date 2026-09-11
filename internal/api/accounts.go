@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"maps"
 	"net/http"
 	"sort"
 
@@ -58,12 +59,15 @@ func (s *Server) accounts(w http.ResponseWriter, r *http.Request, u model.User) 
 		if !decodeJSON(w, r, &p) {
 			return
 		}
+		before, _ := s.accountFor(u, p.ID)
 		a, err := s.store.UpdateAccount(u, p)
 		if err != nil {
 			writeError(w, 400, err)
 			return
 		}
-		s.cancelAccountWork(a.ID)
+		if a.Disabled != before.Disabled || a.Cookie != before.Cookie || a.Stoken != before.Stoken || a.Mid != before.Mid || !maps.Equal(a.CloudTokens, before.CloudTokens) {
+			s.cancelAccountWork(a.ID)
+		}
 		s.exchange.Wake()
 		writeJSON(w, 200, map[string]any{"ok": true, "data": publicAccount(a)})
 	case http.MethodDelete:

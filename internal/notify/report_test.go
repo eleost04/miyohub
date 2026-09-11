@@ -28,8 +28,12 @@ func TestTaskReportAggregatesAndRedactsCredentials(t *testing.T) {
 		t.Fatalf("invalid aggregate report: %+v", event)
 	}
 	cancelled := TaskEvent(cfg, account, map[string]model.TaskSummary{"games": {Success: 1}}, true, time.Now())
-	if cancelled.Success || !strings.Contains(cancelled.Title, "停止") || !strings.Contains(cancelled.Message, "仅包含已完成阶段") {
+	if cancelled.Success || !strings.Contains(cancelled.Title, "停止") || !strings.Contains(cancelled.Message, "已执行部分") {
 		t.Fatal("cancelled task reported as completed")
+	}
+	withReason := TaskEvent(cfg, account, results, true, time.Now(), "用户主动停止任务 cookie-private")
+	if !strings.Contains(withReason.Message, "用户主动停止任务") || strings.Contains(withReason.Message, "cookie-private") {
+		t.Fatal("stop reason was missing or leaked a credential")
 	}
 	complete := TaskEvent(cfg, account, map[string]model.TaskSummary{"games": {Success: 1}}, false, time.Now())
 	if !complete.Success {

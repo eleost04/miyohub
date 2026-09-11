@@ -52,7 +52,7 @@ func (s *Server) cancelRun(w http.ResponseWriter, r *http.Request, user model.Us
 		return
 	}
 	for _, id := range input.AccountIDs {
-		s.runner.CancelAccount(id)
+		s.runner.CancelAccount(id, "用户主动停止任务")
 	}
 	writeJSON(w, 200, map[string]any{"ok": true})
 }

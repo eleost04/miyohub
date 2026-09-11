@@ -567,7 +567,7 @@ func (s *Server) config(w http.ResponseWriter, r *http.Request, user model.User)
 		cfg := s.store.Config()
 		if !cfg.Enabled {
 			for _, a := range cfg.Accounts {
-				s.runner.CancelAccount(a.ID)
+				s.runner.CancelAccount(a.ID, "管理员已关闭站点任务服务")
 			}
 		}
 		if !cfg.Shop.Enabled {

@@ -28,7 +28,8 @@ func (s *Server) accountTasks(w http.ResponseWriter, r *http.Request, user model
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	if _, ok := s.accountFor(user, input.ID); !ok {
+	before, ok := s.accountFor(user, input.ID)
+	if !ok {
 		writeError(w, 403, errors.New("账号不存在或无权访问"))
 		return
 	}
@@ -37,8 +38,11 @@ func (s *Server) accountTasks(w http.ResponseWriter, r *http.Request, user model
 		writeError(w, 400, err)
 		return
 	}
-	// Changing daily tasks must not interrupt an unrelated exchange plan.
-	s.runner.CancelAccount(a.ID)
+	// A no-op save or next-run schedule change must not interrupt current work.
+	// A real task selection change revokes the old run, never an exchange plan.
+	if !a.TaskSettings.SameWork(before.TaskSettings) {
+		s.runner.CancelAccount(a.ID, "签到项目或任务参数已修改")
+	}
 	a = publicAccount(a)
 	a.ExchangeAllowed = s.store.AccountCanExchange(a.ID)
 	writeJSON(w, 200, map[string]any{"ok": true, "data": a})
@@ -52,6 +56,7 @@ func (s *Server) captchaConfig(w http.ResponseWriter, r *http.Request, user mode
 		if !decodeJSON(w, r, &input) {
 			return
 		}
+		before := s.store.CaptchaSettingsForUser(user.ID)
 		if err := s.store.UpdateUserCaptcha(user.ID, input); err != nil {
 			status := 400
 			if errors.Is(err, store.ErrSiteCaptchaPermission) {
@@ -63,10 +68,12 @@ func (s *Server) captchaConfig(w http.ResponseWriter, r *http.Request, user mode
 			writeError(w, status, err)
 			return
 		}
-		// Revoke an in-flight solver request as well as preventing later calls.
-		s.sms.Cancel(user.ID)
-		for _, a := range s.store.AccountsForUser(user.ID, false) {
-			s.runner.CancelAccount(a.ID)
+		// Only a changed configuration revokes an in-flight solver request.
+		if before.Revision != s.store.CaptchaSettingsForUser(user.ID).Revision {
+			s.sms.Cancel(user.ID)
+			for _, a := range s.store.AccountsForUser(user.ID, false) {
+				s.runner.CancelAccount(a.ID, "验证码服务配置已修改")
+			}
 		}
 	default:
 		methodNotAllowed(w)
@@ -106,7 +113,7 @@ func (s *Server) adminUserPermissions(w http.ResponseWriter, r *http.Request, ac
 			s.exchange.CancelAccount(a.ID)
 		}
 		if before.CanUseSiteCaptcha() && !input.Permissions.SiteCaptcha {
-			s.runner.CancelAccount(a.ID)
+			s.runner.CancelAccount(a.ID, "站点验证码服务权限已撤销")
 		}
 	}
 	if before.CanUseSiteCaptcha() && !input.Permissions.SiteCaptcha {
@@ -140,7 +147,7 @@ func (s *Server) adminUserAccess(w http.ResponseWriter, r *http.Request, actor m
 				s.exchange.CancelAccount(a.ID)
 			}
 			if before.CanUseSiteCaptcha() && !after.CanUseSiteCaptcha() {
-				s.runner.CancelAccount(a.ID)
+				s.runner.CancelAccount(a.ID, "站点验证码服务权限已撤销")
 			}
 		}
 		if before.CanUseSiteCaptcha() && !after.CanUseSiteCaptcha() {

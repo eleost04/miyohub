@@ -128,7 +128,14 @@ func (s *Store) UpdateUserCaptcha(userID string, p model.UserCaptchaConfig) erro
 	if err := validateCaptchaConfig(&next, model.CaptchaConfig{Channels: previous.Channels}, true); err != nil {
 		return err
 	}
-	p.MaxRetries, p.Channels, p.Revision = next.MaxRetries, next.Channels, previous.Revision+1
+	p.MaxRetries, p.Channels = next.MaxRetries, next.Channels
+	if len(previous.Channels) == 0 {
+		previous.Channels = []model.CaptchaChannel{}
+	}
+	if reflect.DeepEqual(p, previous) {
+		return nil
+	}
+	p.Revision = previous.Revision + 1
 	if s.data.UserCaptcha == nil {
 		s.data.UserCaptcha = map[string]model.UserCaptchaConfig{}
 	}
