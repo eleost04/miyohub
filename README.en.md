@@ -62,7 +62,7 @@ Onboarding can be skipped or closed and reopened from the profile. Bind an accou
 
 The site-wide task switch pauses all check-ins. Disabling only the fallback scheduler does not disable personal times. Personal schedules are checked every ten seconds; downtime is not caught up on restart. Automatic runs have durable per-account daily deduplication; manual runs remain possible. A displayed schedule is not a promise of exact-second execution.
 
-A network failure when reading coin-task state is retried at most twice, without replaying mutations. If the upstream reports zero remaining daily rewards, the run checks state without doing tasks again. Previously earned coins are not new rewards, and this situation does not imply a captcha configuration problem.
+Coin-task state uses the full cookie and web headers; community sign-in, interactions and captcha validation use endpoint-specific app credentials and signatures. Zero remaining daily rewards means a state-only check, not new earnings or a captcha problem. Unlisted read/like/share missions are not executed; missing community sign-in entries still respect the user's selected communities.
 
 Administrators generate random invitation codes with independent exchange and site-captcha grants. New invitations default to one use, seven-day expiry, both grants enabled and site captcha selected; these presets are editable. Ordinary registration without an invitation does not receive those grants. Legacy invitations are not retroactively elevated. Expiry, revocation, concurrent redemption, usage limits and the creator's current administrator status are checked server-side.
 

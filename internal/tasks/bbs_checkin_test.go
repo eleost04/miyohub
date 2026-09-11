@@ -152,7 +152,7 @@ func TestBBSRunsOnlyRemainingMissions(t *testing.T) {
 				t.Fatal("wrong forum ID")
 			}
 			return reply(`{"retcode":0,"data":{"list":[{"post":{"post_id":"p1","subject":"test"}}]}}`), nil
-		case "/post/api/post/upvote":
+		case mihoyo.BBSUpvotePath:
 			var body map[string]any
 			json.NewDecoder(r.Body).Decode(&body)
 			if body["is_cancel"] == true {
@@ -275,7 +275,7 @@ func TestBBSDoesNotClaimSuccessWithoutPointsOrRemainingMissionCompletion(t *test
 
 func TestBBSHeadersReplaceSignatureWithoutDuplicateKeys(t *testing.T) {
 	for _, body := range []any{nil, map[string]any{"gids": 2}} {
-		headers := (BBSCheckin{}).headers(body)
+		headers := (BBSCheckin{}).headers(mihoyo.BBSSignPath, body)
 		for key := range headers {
 			if http.CanonicalHeaderKey(key) != key {
 				t.Errorf("non-canonical header %s can bypass Set/Del", key)

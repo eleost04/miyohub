@@ -53,18 +53,9 @@ func missions(state map[string]any, cfg model.BBSConfig) []mission {
 	// New rules omit daily community sign-in from this list (some accounts
 	// return only onboarding missions 62/64). Its absence is NOT completion.
 	// Retired interaction missions, however, must not trigger unsolicited likes.
-	if state["states"] != nil {
-		for i := range result {
-			found := false
-			for _, raw := range maps(state["states"]) {
-				if intValue(raw["mission_id"]) == result[i].id {
-					found = true
-					break
-				}
-			}
-			if !found && result[i].id != 58 {
-				result[i].remaining = 0
-			}
+	for i := range result {
+		if !result[i].present && result[i].id != 58 {
+			result[i].remaining = 0
 		}
 	}
 	return result
@@ -156,15 +147,13 @@ func (b BBSCheckin) Run(ctx context.Context) model.TaskSummary {
 			case 59:
 				_, err = b.request(ctx, http.MethodGet, "/post/api/getPostFull", url.Values{"post_id": {id}}, nil, false)
 			case 60:
-				body := map[string]any{"post_id": id, "is_cancel": false, "gids": text(post["gids"], "")}
-				_, err = b.request(ctx, http.MethodPost, "/post/api/post/upvote", nil, body, true)
+				_, err = b.upvote(ctx, id, text(post["gids"], ""), false)
 				if err == nil && b.Config.BBS.CancelLike {
 					b.record(&summary, "点赞 "+title, nil)
 					if !taskDelay(ctx, b.Config.BBS.DelaySeconds) {
 						return summary
 					}
-					body["is_cancel"] = true
-					_, err = b.request(ctx, http.MethodPost, "/post/api/post/upvote", nil, body, true)
+					_, err = b.upvote(ctx, id, text(post["gids"], ""), true)
 					b.record(&summary, "取消点赞 "+title, err)
 					if errors.Is(err, errCredentials) {
 						return summary
@@ -206,7 +195,22 @@ func (b BBSCheckin) Run(ctx context.Context) model.TaskSummary {
 }
 
 func (b BBSCheckin) state(ctx context.Context) (map[string]any, error) {
-	return b.request(ctx, http.MethodGet, "/apihub/wapi/getUserMissionsState", url.Values{"point_sn": {"myb"}}, nil, false)
+	return b.request(ctx, http.MethodGet, mihoyo.BBSStatePath, url.Values{"point_sn": {"myb"}}, nil, false)
+}
+
+func (b BBSCheckin) upvote(ctx context.Context, postID, gids string, cancel bool) (map[string]any, error) {
+	// MiyoSign and MiyoQian use different upvote routes. Switch only on a
+	// definite missing-route response, never after an uncertain write result,
+	// a captcha challenge, rate limiting or an authentication failure.
+	body := map[string]any{"post_id": postID, "is_cancel": cancel}
+	result, err := b.request(ctx, http.MethodPost, mihoyo.BBSUpvotePath, nil, body, true)
+	var status *mihoyo.HTTPStatusError
+	if errors.As(err, &status) && (status.StatusCode == http.StatusNotFound || status.StatusCode == http.StatusGone) && ctx.Err() == nil {
+		b.add("点赞接口返回 HTTP 404/410，改用兼容接口；网络超时不会重复提交")
+		body["gids"] = gids
+		return b.request(ctx, http.MethodPost, mihoyo.BBSPostVotePath, nil, body, true)
+	}
+	return result, err
 }
 
 // Retry only the read-only mission-state query. Some BBS GET endpoints mutate
@@ -300,10 +304,7 @@ func (b BBSCheckin) request(ctx context.Context, method, path string, query url.
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		headers := b.headers(body)
-		if strings.Contains(path, "wapi") || strings.Contains(path, "ShareConf") {
-			headers.Set("Cookie", b.Account.Cookie)
-		}
+		headers := b.headers(path, body)
 		if challenge != "" {
 			headers.Set("x-rpc-challenge", challenge)
 		}
@@ -349,10 +350,22 @@ func (b BBSCheckin) passCaptcha(ctx context.Context) (string, error) {
 	}
 	return challenge, nil
 }
-func (b BBSCheckin) headers(body any) http.Header {
+func (b BBSCheckin) headers(path string, body any) http.Header {
+	if path == mihoyo.BBSStatePath || path == "/apihub/api/getShareConf" {
+		// Mission-state and web sharing use the full browser cookie/profile,
+		// not an app DS or an okhttp UA (both reference projects agree on state).
+		return http.Header{
+			"Accept": {"application/json, text/plain, */*"}, "Origin": {"https://webstatic.mihoyo.com"},
+			"User-Agent": {mihoyo.DefaultMobileUA}, "Referer": {"https://webstatic.mihoyo.com"},
+			"Accept-Language": {"zh-CN,en-US;q=0.8"}, "X-Requested-With": {"com.mihoyo.hyperion"}, "Cookie": {b.Account.Cookie},
+		}
+	}
 	cookie := b.Account.Cookie
 	if b.Account.Stuid != "" && b.Account.Stoken != "" {
-		cookie = "stuid=" + b.Account.Stuid + ";stoken=" + b.Account.Stoken + ";mid=" + b.Account.Mid
+		cookie = "stuid=" + b.Account.Stuid + ";stoken=" + b.Account.Stoken
+		if b.Account.Mid != "" {
+			cookie += ";mid=" + b.Account.Mid
+		}
 	}
 	headers := http.Header{"Accept": {"application/json"}, "Content-Type": {"application/json; charset=UTF-8"}, "User-Agent": {"okhttp/4.9.3"}, "Cookie": {cookie}, "X-Rpc-Device_id": {b.Config.Device.ID}, "X-Rpc-App_version": {"2.106.2"}, "X-Rpc-Client_type": {"2"}, "X-Rpc-Channel": {"miyousheluodi"}, "Referer": {"https://app.mihoyo.com"}, "Ds": {mihoyo.DS(false)}}
 	headers.Set("x-rpc-device_name", b.Config.Device.Name)
@@ -360,7 +373,8 @@ func (b BBSCheckin) headers(body any) http.Header {
 	headers.Set("x-rpc-sys_version", "12")
 	headers.Set("x-rpc-verify_key", "bll8iq97cem8")
 	headers.Set("x-rpc-csm_source", "home")
-	if body != nil {
+	headers.Set("x-rpc-h265_supported", "1")
+	if path == mihoyo.BBSSignPath && body != nil {
 		headers.Set("DS", mihoyo.DSX6("", compactJSON(body)))
 	}
 	if b.Config.Device.FP != "" {
