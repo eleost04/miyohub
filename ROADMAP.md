@@ -13,7 +13,7 @@
 | TASK-02 | feat | 增加可配置的状态查询重试 | 已实现，隔离测试通过 | 默认 5 次，可设 0–10；实际次数、可取消退避和 Retry-After 已测试；手机/桌面配置可保存，不重放写请求 |
 | TASK-03 | fix | 对齐米游币网页 / App 请求配置 | 已实现，待真实上游验收 | 状态 / 分享使用完整 Cookie 与网页头；仅社区签到使用 body DS；点赞采用 MiyoSign 接口，仅 HTTP 404/410 才切换 MiyoQian 兼容接口，超时不重放；签名和互动范围回归通过 |
 | NET-01 | feat | HTTP / SOCKS5 出站代理 | 已实现，隔离测试通过 | 管理员弹窗配置；覆盖米游社官方接口；密码加密/不回显；HTTP CONNECT / SOCKS5 / SOCKS5H 握手、错误不回退、私有地址隔离与手机/桌面保存测试通过 |
-| SHOP-01 | fix | 对齐 MiyoQian 商品兑换流程 | 请求已对齐，时间展示核对中 | 补平台 5 设备环境、系统版本和端点请求头；实体 / 虚拟负载及身份隔离回归通过，保留未知结果不重放、校时及窗口重试；真实兑换待验收 |
+| SHOP-01 | fix | 对齐 MiyoQian 商品兑换流程 | 已实现，待真实上游验收 | 设备指纹 / 请求头 / 实体与虚拟负载已核对；补开售与补货轮次、空库存判断；缺时间时按需查详情，320px / 桌面预约回归通过；保留未知结果不重放、校时及窗口重试 |
 | PUSH-01 | fix | QQ 官方页面点击连接无响应 | 已实现，待真实设备验收 | 官方页等待 online_state=1；网关鉴权/心跳/恢复已覆盖；扫码关闭、返回、刷新可恢复，显式取消与过期仍生效；320px / 桌面和用户隔离回归通过 |
 | DOC-01 | docs | 面向项目读者的双语说明与维护规则 | 已实现 | README、功能看板、版本/分支/提交/发布规则可直接使用 |
 
@@ -26,7 +26,7 @@
 | 云·原神 / 云·绝区零 | 已实现，真实服务待验收 | `internal/tasks/cloud_checkin.go` | 需独立 Combo Token |
 | 米游币社区及互动任务 | 已实现，TASK-01/03 待上线验收 | `internal/tasks/bbs_checkin.go`、`internal/tasks/bbs_protocol_test.go` | 对照 MiyoSign / MiyoQian；只执行仍存在的互动任务，收益需复查确认 |
 | 个人签到时间、每日去重 | 已实现 | `internal/scheduler/`、`internal/store/task_settings.go` | 个人时间优先；不补跑离线时段 |
-| 实物 / 虚拟商品与预约 | 已实现，SHOP-01 待对齐 | `internal/shop/`、`internal/shop/engine_test.go` | 参考 MiyoQian；不承诺库存或兑换成功 |
+| 实物 / 虚拟商品与预约 | 已实现，SHOP-01 待真实验收 | `internal/shop/`、`internal/shop/engine_test.go`、`web/tests/selectors.spec.mjs` | 参考 MiyoQian；开售时间缺失时先查单品详情；不承诺库存或兑换成功 |
 | 上游时钟与有限兑换重试 | 已实现 | `internal/shop/clock.go`、`internal/shop/exchange.go` | 秒级上游时间；未知结果不盲目重复提交 |
 | 多用户隔离、邀请码预授权 | 已实现 | `internal/store/permissions.go`、`internal/api/owner_isolation_test.go` | 管理员在日常页面也只见本人账号 |
 | 个人 / 站点验证码服务 | 已实现 | `internal/captcha/`、`internal/api/captcha_probe.go` | 自建服务为可选组件；后台探测有独立冷却 |

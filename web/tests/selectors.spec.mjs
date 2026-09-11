@@ -5,9 +5,9 @@ import { choose } from './ui.mjs'
 const origin = 'http://127.0.0.1:4177'
 const physicalName = '【崩坏：星穹铁道】叽米的会客室系列 毛绒挂件-三月小鸟'
 
-async function workspace(browser, width) {
+async function workspace(browser, width, ambiguousTime = false) {
   const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce', timezoneId: 'Asia/Shanghai', ...(width <= 640 ? { isMobile: true, hasTouch: true } : {}) })
-  const page = await context.newPage(), errors = [], writes = [], catalogs = []
+  const page = await context.newPage(), errors = [], writes = [], catalogs = [], details = []
   const user = { id: 'selector-owner', username: '选择器测试', role: 'admin', status: 'active' }
   const accounts = ['a1', 'a2'].map((id, index) => ({ id, user_id: user.id, name: index ? '备用兑换账号' : '主要兑换账号', disabled: false, status: 'valid', has_cookie: true, has_stoken: true }))
   const config = { enabled: true, accounts, features: { game_checkin: true, cloud_game_checkin: false, bbs_tasks: true }, games: { enabled: ['starrail'], black_list: {} }, cloud_games: { enabled: [] }, bbs: { forums: [6], checkin: true, read: true, like: true, share: true, cancel_like: false, post_limit: 5, delay_seconds: [1, 3] }, schedule: { enable: false, time: '09:00', timezone: 'Asia/Shanghai', jitter_minutes: 5, run_on_start: false }, captcha: { max_retries: 2, channels: [] }, push: { channels: [], error_only: false }, shop_exchange: { enable: true, retry_seconds: 10, retry_interval: .5, plans: [] } }
@@ -15,6 +15,7 @@ async function workspace(browser, width) {
     { goods_id: 'physical', goods_name: physicalName, type: 1, price: 40000, game_biz: '', requires_address: true, requires_role: false, stock: '10', limit: '每月 0/1', display_status: 'scheduled', exchange_time: '即将开放', exchange_timestamp: Math.floor(Date.now() / 1000) + 10800, icon: '' },
     { goods_id: 'virtual', goods_name: '星穹铁道 · 游戏礼包（模拟商品）', type: 2, price: 1000, game_biz: 'hkrpg_cn', requires_address: false, requires_role: true, stock: '10', limit: '每月 0/1', display_status: 'online', exchange_time: '正在兑换', exchange_timestamp: 0, icon: '' },
   ]
+  const catalogGoods = goods.map(good => ambiguousTime && good.type === 1 ? { ...good, exchange_timestamp: 0, exchange_time: '开放时间待详情确认', time_needs_detail: true } : good)
   page.on('pageerror', e => errors.push(e.message))
   await context.route('**/*', async route => {
     const request = route.request(), url = new URL(request.url()), path = url.pathname
@@ -25,8 +26,8 @@ async function workspace(browser, width) {
     if (path === '/api/v1/bootstrap') return ok({ auth: { has_admin: true, need_auth: true }, user, config, status })
     if (path === '/api/v1/status') return ok(status)
     if (path === '/api/v1/shop/status') return ok({ enabled: true, running: 0, next_run: 0, server_time: new Date().toISOString(), clock: { offset_ms: 0, rtt_ms: 10, error: '' } })
-    if (path === '/api/v1/shop/goods') { catalogs.push(url.search); return ok({ games: [{ key: 'all', name: '全部商品' }, { key: 'hkrpg', name: '星穹铁道' }], goods }) }
-    if (path === '/api/v1/shop/good-detail') return ok(goods.find(g => g.goods_id === url.searchParams.get('goods_id')))
+    if (path === '/api/v1/shop/goods') { catalogs.push(url.search); return ok({ games: [{ key: 'all', name: '全部商品' }, { key: 'hkrpg', name: '星穹铁道' }], goods: catalogGoods }) }
+    if (path === '/api/v1/shop/good-detail') { details.push(url.searchParams.get('goods_id')); return ok(goods.find(g => g.goods_id === url.searchParams.get('goods_id'))) }
     if (path === '/api/v1/shop/points') return ok({ points: 50000 })
     if (path === '/api/v1/shop/addresses') return ok([1, 2].map(n => ({ id: url.searchParams.get('account_id') + '-addr-' + n, name: '模拟收件人 ' + n, phone: '138****8000', address: '模拟省 模拟市 测试路 ' + n + ' 号（不寄送任何物品）' })))
     if (path === '/api/v1/shop/roles') return ok([1, 2].map(n => ({ uid: '10000000' + n, region: 'prod_gf_cn', nickname: '模拟开拓者 ' + n, region_name: '星穹列车', level: '70' })))
@@ -43,8 +44,31 @@ async function workspace(browser, width) {
   })
   await page.goto(origin + '/#shop')
   await expect(page.locator('.good-card')).toHaveCount(1)
-  return { context, page, errors, writes, catalogs }
+  return { context, page, errors, writes, catalogs, details, goods }
 }
+
+for (const width of [320, 1440]) test(`缺失本轮时间 ${width}px：列表不误用补货时间，详情校验后预约`, async ({ browser }) => {
+  const w = await workspace(browser, width, true), { page } = w
+  try {
+    const card = page.locator('.good-card').filter({ hasText: physicalName })
+    await expect(card.getByText('开放时间待详情确认', { exact: true })).toBeVisible()
+    assert.equal(w.catalogs.length, 1)
+    assert.equal(w.details.length, 0, 'catalog eagerly loaded product details')
+    await card.getByRole('button', { name: '查看详情' }).click()
+    const dialog = page.getByRole('dialog', { name: physicalName, exact: true })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByText('开放时间待详情确认', { exact: true })).toHaveCount(0)
+    await dialog.getByRole('button', { name: '预约这件商品', exact: true }).click()
+    await expect(page.getByRole('combobox', { name: '收货地址', exact: true })).toBeEnabled()
+    await choose(page, '收货地址', 'a1-addr-1')
+    await dialog.getByRole('button', { name: '保存预约', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    assert.deepEqual(w.details, ['physical'])
+    assert.equal(w.writes[0].exchange_at, w.goods[0].exchange_timestamp)
+    assert.equal(w.writes[0].auto, true)
+    assert.deepEqual(w.errors, [])
+  } finally { await w.context.close() }
+})
 
 for (const width of [390, 1440]) test(`预约选择器 ${width}px：键盘、窗口调整和返回不丢失选择`, async ({ browser }, testInfo) => {
   const w = await workspace(browser, width), { page } = w

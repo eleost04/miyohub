@@ -58,6 +58,7 @@ export interface ShopGood {
   sold_out: boolean
   exchange_timestamp: number
   exchange_time: string
+  time_needs_detail?: boolean
   display_status: string
   limit: string
 }

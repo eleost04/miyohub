@@ -59,7 +59,17 @@ func (s Service) Goods(ctx context.Context, game string) (map[string]any, error)
 				continue
 			}
 			seen[id] = true
-			goods = append(goods, normalizeGood(item))
+			good := normalizeGood(item)
+			if text(item["status"], "") == "not_in_sell" && !boolValue(good["sold_out"]) && intValue(item["next_time"]) > 0 && intValue(item["sale_start_time"]) <= 0 {
+				// The list can contain next week's restock but omit today's
+				// opening. MiyoQian enriches these items with detail requests.
+				// Keep our first catalog load small: mark it uncertain and
+				// use the existing fresh-detail request before creating a plan.
+				good["time_needs_detail"] = true
+				good["exchange_timestamp"] = 0
+				good["exchange_time"] = "开放时间待详情确认"
+			}
+			goods = append(goods, good)
 			added++
 		}
 		if added == 0 || len(items) < 20 || data["has_more"] == false {
@@ -292,7 +302,8 @@ func normalizeGood(raw map[string]any) map[string]any {
 	unlimit := boolValue(raw["unlimit"])
 	total := intValue(raw["total"])
 	nextNum := intValue(raw["next_num"])
-	soldOut := !unlimit && ((raw["total"] != nil && total <= 0) || (raw["total"] == nil && nextNum <= 0))
+	totalKnown := text(raw["total"], "") != ""
+	soldOut := !unlimit && (totalKnown && total <= 0 || !totalKnown && nextNum <= 0)
 	nextTime := intValue(raw["next_time"])
 	saleStart := intValue(raw["sale_start_time"])
 	now := intValue(raw["now_time"])
@@ -302,7 +313,7 @@ func normalizeGood(raw map[string]any) map[string]any {
 	exchangeAt := 0
 	if soldOut {
 		exchangeAt = nextTime
-	} else if status != "online" && saleStart > now {
+	} else if status != "online" && saleStart > now && (nextTime <= 0 || saleStart <= nextTime) {
 		exchangeAt = saleStart
 	} else if status != "online" {
 		exchangeAt = nextTime
@@ -322,7 +333,7 @@ func normalizeGood(raw map[string]any) map[string]any {
 	stock := "未知"
 	if unlimit {
 		stock = "不限"
-	} else if raw["total"] != nil {
+	} else if totalKnown {
 		stock = strconv.Itoa(total)
 	} else if raw["next_num"] != nil {
 		stock = strconv.Itoa(nextNum)

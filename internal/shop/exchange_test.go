@@ -96,3 +96,50 @@ func TestCatalogAllAliasUsesWorkingUpstreamQuery(t *testing.T) {
 		t.Fatal("all-goods compatibility lost physical or virtual goods", err)
 	}
 }
+
+func TestSaleTimeChoosesEarlierValidRoundAndTreatsBlankStockAsMissing(t *testing.T) {
+	const now = 1800000000
+	for _, total := range []any{nil, "", 4, "4"} {
+		raw := map[string]any{"status": "not_in_sell", "total": total, "next_num": 4, "sale_start_time": now + 3600, "next_time": now + 60, "now_time": now}
+		good := normalizeGood(raw)
+		if good["sold_out"] != false || good["stock"] != "4" || good["exchange_timestamp"] != now+60 {
+			t.Fatal("earlier sale or fallback stock was lost", good)
+		}
+		raw["sale_start_time"] = now + 30
+		if got := normalizeGood(raw); got["exchange_timestamp"] != now+30 {
+			t.Fatal("earlier future sale_start_time was ignored", got)
+		}
+	}
+}
+
+func TestCatalogMarksAmbiguousTimeAndLoadsDetailOnlyWhenRequested(t *testing.T) {
+	const now = 1800000000
+	listCalls, detailCalls := 0, 0
+	client := mihoyo.NewClient("")
+	client.HTTP.Transport = testTransport(func(r *http.Request) (*http.Response, error) {
+		switch r.URL.Path {
+		case mihoyo.MallGoodsPath:
+			listCalls++
+			return response(fmt.Sprintf(`{"retcode":0,"data":{"has_more":false,"list":[{"goods_id":"fixture","status":"not_in_sell","total":4,"next_time":%d,"now_time":%d}]}}`, now+604800, now)), nil
+		case mihoyo.MallDetailPath:
+			detailCalls++
+			return response(fmt.Sprintf(`{"retcode":0,"data":{"goods_id":"fixture","status":"not_in_sell","total":4,"next_time":%d,"sale_start_time":%d,"now_time":%d}}`, now+604800, now+60, now)), nil
+		default:
+			t.Fatal("unexpected catalog request", r.URL.Path)
+			return nil, nil
+		}
+	})
+	service := Service{Client: client}
+	result, err := service.Goods(t.Context(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	good := result["goods"].([]map[string]any)[0]
+	if listCalls != 1 || detailCalls != 0 || good["time_needs_detail"] != true || good["exchange_timestamp"] != 0 || good["exchange_time"] != "开放时间待详情确认" {
+		t.Fatal("catalog claimed an ambiguous restock time or eagerly fetched every detail", good, listCalls, detailCalls)
+	}
+	detail, err := service.GoodDetail(t.Context(), "fixture")
+	if err != nil || detail["exchange_timestamp"] != now+60 || detailCalls != 1 {
+		t.Fatal("selected good did not use its fresh detail time", detail, err)
+	}
+}
