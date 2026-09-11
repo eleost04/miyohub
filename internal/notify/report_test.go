@@ -24,7 +24,7 @@ func TestTaskReportAggregatesAndRedactsCredentials(t *testing.T) {
 			t.Fatal("report leaked", secret)
 		}
 	}
-	if event.Success || event.UserID != account.UserID || event.AccountID != account.ID || !strings.Contains(event.Title, "余额不足") || !strings.Contains(event.Message, "成功 6 · 失败 1 · 跳过 1") || !strings.Contains(event.Message, "2026-09-10 09:00:00 +08:00") {
+	if event.Success || event.UserID != account.UserID || event.AccountID != account.ID || !strings.Contains(event.Title, "余额不足") || !strings.Contains(event.Message, "游戏签到：成功 2 · 失败 1") || !strings.Contains(event.Message, "2026-09-10 09:00:00 +08:00") {
 		t.Fatalf("invalid aggregate report: %+v", event)
 	}
 	cancelled := TaskEvent(cfg, account, map[string]model.TaskSummary{"games": {Success: 1}}, true, time.Now())
@@ -64,7 +64,7 @@ func TestExchangeReportsDoNotLeakDeliveryDataOrMislabelUnknownResults(t *testing
 	}
 }
 
-func TestTaskReportShowsRecoveredQueryAndFinalCompletion(t *testing.T) {
+func TestTaskReportShowsFinalCompletionWithoutRetryChatter(t *testing.T) {
 	const reason = "今日已领取 50 米游币，剩余可领取 0；本次仅检查状态，未重复执行任务。"
 	results := map[string]model.TaskSummary{
 		"games": {Skipped: 3, Details: []string{
@@ -86,18 +86,15 @@ func TestTaskReportShowsRecoveredQueryAndFinalCompletion(t *testing.T) {
 	if !event.Success || event.Title != "MiyoHub · 签到检查完成" {
 		t.Fatal("completed status query was mislabelled", event)
 	}
-	for _, want := range []string{"本次操作：成功 0 · 失败 0 · 跳过 4", "今日已签到", "今日无待领取奖励（本次仅检查）", "状态查询已恢复（已自动重试 1 次）", "余额 44054", reason} {
+	for _, want := range []string{"游戏签到：今日已签到 3", "米游币：今日已得 50", "剩余可得 0", "余额 44054", "本次仅检查"} {
 		if !strings.Contains(event.Message, want) {
 			t.Fatal("missing final outcome", want, event.Message)
 		}
 	}
-	for _, unwanted := range []string{"秒后进行", "操作汇总", "签到汇总", "本次新增 50"} {
+	for _, unwanted := range []string{"本次操作", "查询已恢复", "秒后进行", "操作汇总", "签到汇总", "本次新增 50", "原石", reason} {
 		if strings.Contains(event.Message, unwanted) {
 			t.Fatal("notification included pending/redundant or inaccurate text", unwanted)
 		}
-	}
-	if strings.Count(event.Message, reason) != 1 {
-		t.Fatal("completion reason repeated", event.Message)
 	}
 	after, _ := json.Marshal(results)
 	if string(before) != string(after) {
@@ -116,7 +113,7 @@ func TestTaskReportKeepsFailuresAndDoesNotTreatAllSkipsAsCompleted(t *testing.T)
 		{"later-query-failed", model.TaskSummary{Failed: 1, Details: []string{"米游币任务状态查询已恢复（已自动重试 1 次）", "任务完成状态确认失败: 网络异常"}}, false, "任务完成状态确认失败"},
 		{"cancelled", model.TaskSummary{Failed: 1, Details: []string{"米游币任务状态查询遇到网络异常，1 秒后进行第 1/2 次重试（不重复签到或兑换）", "米游币任务状态获取失败: context canceled"}}, true, "任务已停止"},
 		{"missing-role", model.TaskSummary{Skipped: 1, Details: []string{"原神未绑定角色"}}, false, "未绑定角色"},
-		{"disabled", model.TaskSummary{Skipped: 1, Details: []string{"社区签到未启用，跳过"}}, false, "未启用，跳过"},
+		{"disabled", model.TaskSummary{Skipped: 1, Details: []string{"社区签到未启用，跳过"}}, false, "未执行"},
 		{"contradictory-status", model.TaskSummary{Status: "already_complete", Failed: 1, Details: []string{"状态查询失败"}}, false, "状态查询失败"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -133,11 +130,74 @@ func TestTaskReportKeepsFailuresAndDoesNotTreatAllSkipsAsCompleted(t *testing.T)
 	}
 	failure := "原神签到失败: 仍需验证码，请检查验证码渠道"
 	event := TaskEvent(model.Config{}, model.Account{}, map[string]model.TaskSummary{"games": {Success: 6, Failed: 1, Details: []string{failure, "角色 1 签到成功", "角色 2 签到成功", "角色 3 签到成功", "角色 4 签到成功", "角色 5 签到成功", "角色 6 签到成功", "游戏签到汇总：成功 6，失败 1，跳过 0"}}}, false, time.Now())
-	if event.Success || !strings.Contains(event.Message, failure) || !strings.Contains(event.Message, "另有 2 条明细") {
+	if event.Success || !strings.Contains(event.Message, failure) || strings.Contains(event.Message, "另有") || strings.Contains(event.Message, "角色 6 签到成功") {
 		t.Fatal("later successes buried a real failure", event)
 	}
 	redacted := TaskEvent(model.Config{}, model.Account{Stoken: "PRIVATE_REASON_SECRET"}, map[string]model.TaskSummary{"bbs": {Skipped: 1, Status: "already_complete", Reason: "PRIVATE_REASON_SECRET"}}, false, time.Now())
 	if strings.Contains(redacted.Message, "PRIVATE_REASON_SECRET") || !strings.Contains(redacted.Message, "[已隐藏]") {
 		t.Fatal("structured reason bypassed redaction", redacted)
+	}
+}
+
+func TestTaskReportKeepsCoinOutcomeInsteadOfRoutineDetails(t *testing.T) {
+	results := map[string]model.TaskSummary{
+		"games": {Success: 3, Details: []string{"原神 模拟角色(10001)签到成功，奖励 炸萝卜丸子 x3", "星穹铁道 模拟角色(10002)签到成功", "绝区零 模拟角色(10003)签到成功", "游戏签到汇总：成功 3，失败 0，跳过 0"}},
+		"bbs": {Success: 4, Skipped: 3, Details: []string{
+			"今日已得 0，还可获得 50，余额 2000",
+			"任务接口未列出社区签到项；仍按已选社区执行签到，不将缺失任务误判为已完成",
+			"大别野社区签到成功", "原神社区签到成功", "星穹铁道社区签到成功", "绝区零社区签到成功",
+			"看帖：当前上游未提供该互动任务，跳过", "点赞：当前上游未提供该互动任务，跳过", "分享未启用，跳过",
+			"米游币本次新增 50，今日已得 50，剩余可得 0，余额 2050", "米游币操作汇总：成功 4，失败 0，跳过 3",
+		}},
+	}
+	before, _ := json.Marshal(results)
+	event := TaskEvent(model.Config{}, model.Account{Name: "模拟账号"}, results, false, time.Now())
+	for _, want := range []string{"游戏签到：成功 3", "米游币：本次新增 50 · 今日已得 50 · 剩余可得 0 · 余额 2050"} {
+		if !strings.Contains(event.Message, want) {
+			t.Fatal("missing concise final outcome", want, event.Message)
+		}
+	}
+	for _, unwanted := range []string{"本次操作", "失败 0", "跳过", "另有", "社区签到成功", "米游币任务：成功", "10001", "炸萝卜丸子", "余额 2000"} {
+		if strings.Contains(event.Message, unwanted) {
+			t.Fatal("routine details crowded the notification", unwanted, event.Message)
+		}
+	}
+	if !event.Success || len([]rune(event.Message)) > 180 {
+		t.Fatal("normal report is not compact", event)
+	}
+	after, _ := json.Marshal(results)
+	if string(before) != string(after) {
+		t.Fatal("compaction changed full stored results")
+	}
+}
+
+func TestTaskReportDoesNotInventCoinGainAfterFailedConfirmation(t *testing.T) {
+	for _, result := range []model.TaskSummary{
+		{Success: 2, Failed: 1, Details: []string{"今日已得 0，还可获得 50，余额 2000", "原神社区签到成功", "任务完成状态确认失败: 网络异常"}},
+		{Success: 2, Failed: 1, Details: []string{"米游币本次新增 0，今日已得 0，剩余可得 50，余额 2000", "增币尚未确认：仍有可得米游币但本次未增加"}},
+	} {
+		event := TaskEvent(model.Config{}, model.Account{}, map[string]model.TaskSummary{"bbs": result}, false, time.Now())
+		if event.Success || !strings.Contains(event.Message, "失败 1") || strings.Contains(event.Message, "本次新增 50") || !strings.Contains(event.Message, "确认") {
+			t.Fatal("uncertain coin outcome was hidden or invented", event)
+		}
+	}
+}
+
+func TestTaskReportBoundsFailuresWithoutHidingTheFailureState(t *testing.T) {
+	details := []string{}
+	for i := 0; i < 20; i++ {
+		details = append(details, "模拟任务执行失败: 网络异常，完整过程应保留在站内")
+	}
+	event := TaskEvent(model.Config{}, model.Account{}, map[string]model.TaskSummary{"bbs": {Failed: 20, Details: details}}, false, time.Now())
+	if event.Success || !strings.Contains(event.Message, "失败 20") || strings.Count(event.Message, "模拟任务执行失败") > 3 || len([]rune(event.Message)) > 800 {
+		t.Fatal("failure report is unbounded or mislabelled", event)
+	}
+}
+
+func TestTaskReportCoinSummaryRetainsRedaction(t *testing.T) {
+	account := model.Account{Stoken: "2050"}
+	event := TaskEvent(model.Config{}, account, map[string]model.TaskSummary{"bbs": {Success: 1, Details: []string{"米游币本次新增 50，今日已得 50，剩余可得 0，余额 2050"}}}, false, time.Now())
+	if strings.Contains(event.Message, "2050") || !strings.Contains(event.Message, "[已隐藏]") {
+		t.Fatal("compact coin summary bypassed redaction", event)
 	}
 }
