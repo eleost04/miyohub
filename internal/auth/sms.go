@@ -89,7 +89,7 @@ type SMSManager struct {
 }
 
 func NewSMSManager(s *store.Store) *SMSManager {
-	return &SMSManager{store: s, client: mihoyo.NewClient(""), sessions: map[string]*smsSession{}, phones: map[string]time.Time{}}
+	return &SMSManager{store: s, client: mihoyo.NewClient("", s.NetworkConfig), sessions: map[string]*smsSession{}, phones: map[string]time.Time{}}
 }
 
 func (m *SMSManager) Send(parent context.Context, userID, phone, name, target string, verificationMode ...string) (SMSState, error) {

@@ -19,6 +19,7 @@ export interface CaptchaChannel {
 export interface CaptchaAttempt { at: string; source: string; provider: string; channel_id: string; kind: string; ok: boolean; code: string; duration_ms: number }
 export interface CaptchaProbe { id: string; status: 'running' | 'succeeded' | 'failed' | 'interrupted'; started_at: string; finished_at?: string; retry_at: string; duration_ms: number; message: string }
 export interface CaptchaSettings { source: 'off' | 'personal' | 'site'; revision: number; max_retries: number; channels: CaptchaChannel[]; site_allowed: boolean; site_available: boolean; activity?: CaptchaAttempt[] }
+export interface ProxySettings { enable: boolean; url: string; username: string; password: string; has_password?: boolean; clear_password?: boolean }
 export interface Config {
   enabled: boolean
   accounts: Account[]
@@ -26,7 +27,7 @@ export interface Config {
   games: { enabled: string[]; black_list: Record<string, string[]> }
   cloud_games: { enabled: string[] }
   bbs: { forums: number[]; checkin: boolean; read: boolean; like: boolean; share: boolean; cancel_like: boolean; post_limit: number; delay_seconds: number[] }
-  network: { bbs_state_retries?: number }
+  network: { bbs_state_retries?: number; proxy: ProxySettings }
   schedule: { enable: boolean; time: string; timezone: string; jitter_minutes: number; run_on_start: boolean }
   push: { error_only: boolean; channels: Array<{ provider: string; enable: boolean }> }
   captcha: { max_retries: number; channels: CaptchaChannel[] }

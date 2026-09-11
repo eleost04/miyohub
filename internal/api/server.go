@@ -44,7 +44,7 @@ func NewServerWithOptions(s *store.Store, options Options) *Server {
 	if options.Version == "" {
 		options.Version = buildinfo.Version()
 	}
-	server := &Server{options: options, store: s, runner: tasks.NewRunner(s), qr: auth.NewQRManager(s), sms: auth.NewSMSManager(s), shopClient: mihoyo.NewClient("")}
+	server := &Server{options: options, store: s, runner: tasks.NewRunner(s), qr: auth.NewQRManager(s), sms: auth.NewSMSManager(s), shopClient: mihoyo.NewClient("", s.NetworkConfig)}
 	server.exchange = shop.NewEngine(s, server.shopClient)
 	sender := notify.Sender{HTTP: notify.NewHTTPClient()}
 	server.pushSender = sender
@@ -593,6 +593,7 @@ func publicConfig(config model.Config) model.Config {
 	}
 
 	config.Device = model.Device{}
+	config.Network = store.PublicNetwork(config.Network)
 	config.Push.Channels = []model.PushChannel{}
 	config.Captcha.Channels = append([]model.CaptchaChannel{}, config.Captcha.Channels...)
 	for index := range config.Captcha.Channels {
@@ -613,6 +614,7 @@ func publicConfigForUser(config model.Config, user model.User) model.Config {
 	config = publicConfig(config)
 	if user.Role != "admin" {
 		config.Captcha = model.CaptchaConfig{Channels: []model.CaptchaChannel{}}
+		config.Network.Proxy = model.ProxyConfig{}
 	}
 	// Legacy global exclusions are not personal rules and may contain another
 	// user's role UIDs. Account-scoped preferences are exposed on each account.

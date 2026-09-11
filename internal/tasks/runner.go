@@ -29,7 +29,7 @@ type Runner struct {
 }
 
 func NewRunner(s *store.Store) *Runner {
-	return &Runner{store: s, running: map[string]context.CancelCauseFunc{}, contexts: map[string]context.Context{}, progress: map[string]model.TaskProgress{}, batches: map[string]context.CancelFunc{}, newClient: func() *mihoyo.Client { return mihoyo.NewClient("") }}
+	return &Runner{store: s, running: map[string]context.CancelCauseFunc{}, contexts: map[string]context.Context{}, progress: map[string]model.TaskProgress{}, batches: map[string]context.CancelFunc{}, newClient: func() *mihoyo.Client { return mihoyo.NewClient("", s.NetworkConfig) }}
 }
 
 var errNoTasks = errors.New("没有匹配且已启用的账号任务，请在账号的签到设置中选择任务")

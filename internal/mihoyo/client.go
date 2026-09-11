@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/eleost04/miyohub/internal/model"
 )
 
 const DefaultMobileUA = "Mozilla/5.0 (Linux; Android 12; Unspecified Device) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/103.0.5060.129 Mobile Safari/537.36 miHoYoBBS/2.106.2"
@@ -20,8 +22,12 @@ type Client struct {
 	UserAgent string
 }
 
-func NewClient(baseURL string) *Client {
-	return &Client{HTTP: &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, BaseURL: strings.TrimRight(baseURL, "/"), UserAgent: DefaultMobileUA}
+func NewClient(baseURL string, network ...func() model.NetworkConfig) *Client {
+	c := &Client{HTTP: &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, BaseURL: strings.TrimRight(baseURL, "/"), UserAgent: DefaultMobileUA}
+	if len(network) > 0 && network[0] != nil {
+		c.HTTP.Transport = newUpstreamTransport(http.DefaultTransport, network[0])
+	}
+	return c
 }
 
 func (c *Client) JSON(ctx context.Context, method, path string, query url.Values, body any, headers http.Header, out any) error {

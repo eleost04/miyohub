@@ -11,7 +11,7 @@ import (
 // when an upstream error has accidentally echoed a credential into a log.
 func (s *Store) RedactedLogsForUser(userID string, admin bool) []model.LogEntry {
 	config := s.Config()
-	secrets := []string{}
+	secrets := []string{config.Network.Proxy.URL, config.Network.Proxy.Username, config.Network.Proxy.Password}
 	for _, a := range config.Accounts {
 		secrets = append(secrets, a.Cookie, a.Stoken, a.Mid)
 		for _, part := range strings.Split(a.Cookie, ";") {

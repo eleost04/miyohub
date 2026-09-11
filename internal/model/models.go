@@ -111,7 +111,17 @@ type BBSConfig struct {
 
 type NetworkConfig struct {
 	// nil preserves the default for configurations created before this field.
-	BBSStateRetries *int `json:"bbs_state_retries,omitempty"`
+	BBSStateRetries *int        `json:"bbs_state_retries,omitempty"`
+	Proxy           ProxyConfig `json:"proxy"`
+}
+
+type ProxyConfig struct {
+	Enabled       bool   `json:"enable"`
+	URL           string `json:"url"`
+	Username      string `json:"username"`
+	Password      string `json:"password"`
+	HasPassword   bool   `json:"has_password,omitempty"` // Public view only.
+	ClearPassword bool   `json:"clear_password,omitempty"`
 }
 
 func (n NetworkConfig) StateRetries() int {

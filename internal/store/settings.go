@@ -52,6 +52,9 @@ func (s *Store) UpdateSettings(p SettingsPatch) error {
 	if retries := next.Network.BBSStateRetries; retries != nil && (*retries < 0 || *retries > 10) {
 		return errors.New("米游币状态查询重试次数应在 0–10 之间")
 	}
+	if err := validateNetwork(&next.Network, s.data.Config.Network); err != nil {
+		return err
+	}
 	if p.Shop != nil {
 		next.Shop.Enabled = p.Shop.Enabled
 		next.Shop.RetrySeconds = p.Shop.RetrySeconds

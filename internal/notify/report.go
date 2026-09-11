@@ -204,6 +204,7 @@ func sanitize(text string, cfg model.Config, account model.Account) string {
 		return "详情过长，请在站内查看。"
 	}
 	values := []string{account.Cookie, account.Stoken, account.Stuid, account.Mid, account.Device.ID, account.Device.FP, account.ShopDeviceFP}
+	values = append(values, cfg.Network.Proxy.URL, cfg.Network.Proxy.Username, cfg.Network.Proxy.Password)
 	for _, part := range strings.Split(account.Cookie, ";") {
 		if _, value, ok := strings.Cut(strings.TrimSpace(part), "="); ok {
 			values = append(values, value)
