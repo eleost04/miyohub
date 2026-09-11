@@ -159,6 +159,7 @@ func taskReportDetails(result model.TaskSummary) ([]string, int) {
 			strings.HasPrefix(detail, "米游币任务状态查询已恢复（") ||
 			strings.HasPrefix(detail, "米游币任务列表：") ||
 			strings.HasPrefix(detail, "米游币任务设置：") ||
+			strings.HasPrefix(detail, "米游币执行方式：") ||
 			strings.HasPrefix(detail, "游戏签到汇总：") ||
 			strings.HasPrefix(detail, "云游戏签到汇总：") ||
 			strings.HasPrefix(detail, "米游币操作汇总：") ||

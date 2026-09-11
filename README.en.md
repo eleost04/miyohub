@@ -64,7 +64,12 @@ Onboarding can be skipped or closed and reopened from the profile. Bind an accou
 
 The site-wide task switch pauses all check-ins. Disabling only the fallback scheduler does not disable personal times. Personal schedules are checked every ten seconds; downtime is not caught up on restart. Automatic runs have durable per-account daily deduplication; manual runs remain possible. A displayed schedule is not a promise of exact-second execution.
 
-Coin-task state uses the full cookie and web headers; community sign-in, interactions and captcha validation use endpoint-specific app credentials and signatures. Zero remaining daily rewards means a state-only check, not new earnings or a captcha problem. Unlisted read/like/share missions are not executed; missing community sign-in entries still respect the user's selected communities.
+Coin-task state uses the full cookie and web headers; community sign-in, interactions and captcha validation use endpoint-specific app credentials and signatures. Each account's task settings offer two execution modes:
+
+- **Follow reward progress (default)**: zero remaining rewards means a state-only check. Completed or unlisted read/like/share missions are skipped; missing community sign-in entries still respect the selected communities.
+- **Run selected actions**: explicitly enabled actions run even without reward missions or after rewards are claimed. Each selected community is signed once, with up to 3 post reads, 5 likes and 1 share, capped by the post limit. Disabled actions stay disabled. Running manually again repeats the selected actions; network/credential safety rules still apply.
+
+Both modes recheck coins. A successful action does not guarantee a reward; the existing balance is not new earnings and does not imply a captcha problem. Existing accounts are not silently opted into independent execution.
 
 Administrators generate random invitation codes with independent exchange and site-captcha grants. New invitations default to one use, seven-day expiry, both grants enabled and site captcha selected; these presets are editable. Ordinary registration without an invitation does not receive those grants. Legacy invitations are not retroactively elevated. Expiry, revocation, concurrent redemption, usage limits and the creator's current administrator status are checked server-side.
 

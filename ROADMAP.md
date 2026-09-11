@@ -14,6 +14,7 @@
 | TASK-01 | fix | 米游币运行被无变化保存取消 | 已部署，配置变更场景待真实复测 | 无变化保存不递增版本；只改时间/自动开关不打断本次执行；正常签到已有用户反馈，但不代替运行中修改配置的验收 |
 | TASK-02 | feat | 增加可配置的状态查询重试 | 已实现，隔离测试通过 | 默认 5 次，可设 0–10；实际次数、可取消退避和 Retry-After 已测试；手机/桌面配置可保存，不重放写请求 |
 | TASK-03 | fix | 对齐米游币网页 / App 请求配置 | 社区签到与增币已有用户反馈，互动待实际任务验收 | 用户反馈社区签到成功、复查有增量且剩余可得为 0；看帖 / 点赞 / 分享代码已实现，但任务列表缺少对应项目时不主动执行，不将缺失项目判定为永久不支持 |
+| TASK-04 | feat | 账号自主选择奖励无关的社区任务 | 已实现，隔离回归通过，目标 beta.2 | 默认按奖励进度；主动选择后，奖励列表缺项或已完成仍有限执行已开启项目；不自动开启点赞 / 分享，不把零增币误报为操作失败；按账号保存，320px / 桌面自动保存与返回测试通过 |
 | NET-01 | feat | HTTP / SOCKS5 出站代理 | 已实现，隔离测试通过 | 管理员弹窗配置；覆盖米游社官方接口；密码加密/不回显；HTTP CONNECT / SOCKS5 / SOCKS5H 握手、错误不回退、私有地址隔离与手机/桌面保存测试通过 |
 | SHOP-01 | fix | 对齐 MiyoQian 商品兑换流程 | 已实现，待真实上游验收 | 设备指纹 / 请求头 / 实体与虚拟负载已核对；补开售与补货轮次、空库存判断；缺时间时按需查详情，320px / 桌面预约回归通过；保留未知结果不重放、校时及窗口重试 |
 | PUSH-01 | fix | QQ 官方页面点击连接无响应 | 已部署并观测到网关上线，问题设备待确认 | 官方页等待 online_state=1；网关鉴权/心跳/恢复已覆盖；已观测到真实连接保持在线，但不等同于鸿蒙客户端点击连接已验收 |
@@ -28,7 +29,7 @@
 | 米游社扫码、Cookie 绑定 | 已实现，真实风控待验收 | `internal/auth/`、`web/tests/onboarding.spec.mjs` | 参考 MiyoQian / MiyoSign；短信问题单列 AUTH-01 |
 | 六款游戏签到、角色排除 | 已实现；三款游戏已有用户成功反馈 | `internal/tasks/game_checkin.go`、`internal/tasks/*_test.go` | 原神 / 星穹铁道 / 绝区零已有成功反馈；其余游戏及角色排除场景不据此宣称全部真实验收 |
 | 云·原神 / 云·绝区零 | 已实现，真实服务待验收 | `internal/tasks/cloud_checkin.go` | 需独立 Combo Token |
-| 米游币社区及互动任务 | 社区签到与增币已有反馈，互动待验收 | `internal/tasks/bbs_checkin.go`、`internal/tasks/bbs_protocol_test.go` | 看帖 / 点赞 / 分享需用户开启且任务接口返回对应项目；缺失不表示程序不支持，不会为补齐次数擅自点赞或分享 |
+| 米游币社区及互动任务 | 社区签到与增币已有反馈，互动待验收 | `internal/tasks/bbs_checkin.go`、`internal/tasks/bbs_selected_test.go` | 默认尊重奖励任务进度；用户可主动选择按所选项目执行，无奖励也有限执行已开启项目；不擅自开启点赞或分享 |
 | 个人签到时间、每日去重 | 已实现 | `internal/scheduler/`、`internal/store/task_settings.go` | 个人时间优先；不补跑离线时段 |
 | 实物 / 虚拟商品与预约 | 已实现，SHOP-01 待真实验收 | `internal/shop/`、`internal/shop/engine_test.go`、`web/tests/selectors.spec.mjs` | 参考 MiyoQian；开售时间缺失时先查单品详情；不承诺库存或兑换成功 |
 | 上游时钟与有限兑换重试 | 已实现 | `internal/shop/clock.go`、`internal/shop/exchange.go` | 秒级上游时间；未知结果不盲目重复提交 |
@@ -59,4 +60,4 @@
 
 ## English summary
 
-This board tracks `develop` / Beta rather than claiming that stable `main` contains every change. The current follow-up targets `0.1.0-beta.2`: concise task notifications and inspectable execution logs. Owner feedback confirms one successful run for Genshin Impact, Honkai: Star Rail and Zenless Zone Zero, plus verified community coin gain; QQ gateway connectivity has been observed. This does not validate every upstream challenge, interaction mission, exchange or mobile client. Missing read/like/share missions are skipped, not classified as permanently unsupported. Game notes/calendars remain planned.
+This board tracks `develop` / Beta rather than claiming that stable `main` contains every change. The current follow-up targets `0.1.0-beta.2`: concise task notifications, inspectable execution logs and opt-in reward-independent community actions. Owner feedback confirms one successful run for Genshin Impact, Honkai: Star Rail and Zenless Zone Zero, plus verified community coin gain; QQ gateway connectivity has been observed. This does not validate every upstream challenge, interaction mission, exchange or mobile client. Missing read/like/share missions are skipped by default, not classified as permanently unsupported; the account owner may explicitly enable bounded independent execution. Game notes/calendars remain planned.

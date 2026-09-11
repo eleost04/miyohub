@@ -19,6 +19,8 @@ const baseline = ref(JSON.stringify(draft.value)), form = ref<HTMLFormElement | 
 const tab = ref('games'), busy = ref(false), error = ref(''), discard = ref(false)
 const tabs = [{ key: 'games', name: '游戏签到', icon: 'check' }, { key: 'cloud', name: '云游戏', icon: 'cloud' }, { key: 'bbs', name: '米游币', icon: 'gift' }]
 const bbsActions = [{ key: 'checkin', name: '社区签到' }, { key: 'read', name: '看帖' }, { key: 'like', name: '点赞' }, { key: 'share', name: '分享' }] as const
+const bbsMode = computed({ get: () => draft.value.bbs.run_all_selected ? 'selected' : 'missions', set: value => { draft.value.bbs.run_all_selected = value === 'selected' } })
+const bbsModes = [{ value: 'missions', label: '按奖励进度执行', description: '已完成或未列出的互动任务跳过；社区签到缺项时仍按所选社区尝试' }, { value: 'selected', label: '按所选项目执行', description: '即使没有奖励任务也执行已开启的项目；不保证获得米游币' }]
 const dirty = computed(() => JSON.stringify(draft.value) !== baseline.value)
 const timeSource = computed({ get: () => draft.value.schedule ? 'custom' : 'site', set: value => { draft.value.schedule = value === 'custom' ? { time: props.schedule.time || '09:00', timezone: props.schedule.timezone || 'Asia/Shanghai' } : null } })
 const timeSources = [{ value: 'custom', label: '自定义签到时间', description: '这个账号按你设置的时间签到，不再跟随站点时间' }, { value: 'site', label: '使用站点默认时间', description: '未设置个人时间时，由站点安排' }]
@@ -63,7 +65,8 @@ async function save() { await persist(); if (!error.value && !dirty.value) emit(
         </section>
         <section v-show="tab === 'bbs'" class="preference-section">
           <label class="check-row section-switch"><input v-model="draft.features.bbs_tasks" type="checkbox" />启用米游币任务</label>
-          <p class="muted">按当天任务进度执行；已完成或不再提供的任务会跳过。验证码使用你的个人打码设置。</p>
+          <label class="bbs-mode-field">执行方式<ChoiceSelect v-model="bbsMode" label="米游币执行方式" :options="bbsModes" :disabled="!draft.features.bbs_tasks" /></label>
+          <p class="muted">{{ draft.bbs.run_all_selected ? '每次运行均执行已开启项目：所选社区各签到一次，看帖最多 3 篇、点赞最多 5 篇、分享最多 1 篇，受帖子数限制。不保证获得米游币；手动再次运行会重新执行。' : '按当天奖励进度执行，已完成或未列出的互动项目跳过。社区签到缺项时仍尝试已选社区。' }}验证码使用你的个人打码设置。</p>
           <div class="check-grid preference-choices"><label v-for="action in bbsActions" :key="action.key"><input v-model="draft.bbs[action.key]" type="checkbox" :disabled="!draft.features.bbs_tasks" />{{ action.name }}</label></div>
           <h3>参与的社区</h3><div class="check-grid preference-choices"><label v-for="forum in forums" :key="forum.id"><input v-model="draft.bbs.forums" type="checkbox" :value="forum.id" :disabled="!draft.features.bbs_tasks" />{{ forum.name }}</label></div>
           <details class="preference-advanced"><summary>执行间隔与更多参数<AppIcon name="chevron" :size="14" /></summary><label class="check-row"><input v-model="draft.bbs.cancel_like" type="checkbox" />完成后取消点赞</label><div class="form-grid"><label>最多帖子数<input v-model.number="draft.bbs.post_limit" type="number" min="1" max="20" required /></label><label>最小任务间隔（秒）<input v-model.number="draft.bbs.delay_seconds[0]" type="number" min="0" max="60" required /></label><label>最大任务间隔（秒）<input v-model.number="draft.bbs.delay_seconds[1]" type="number" :min="draft.bbs.delay_seconds[0]" max="60" required /></label></div></details>
@@ -75,4 +78,4 @@ async function save() { await persist(); if (!error.value && !dirty.value) emit(
     </form>
   </ModalShell>
 </template>
-<style scoped>.account-schedule-card{display:grid;gap:14px;padding:16px;margin:16px 0;border:1px solid #e6e0d3;background:#faf8f1;border-radius:14px}.account-schedule-card label{display:grid;gap:8px;font-size:12px;color:#707763}.account-schedule-card .muted{font-size:11px;margin:0}</style>
+<style scoped>.account-schedule-card{display:grid;gap:14px;padding:16px;margin:16px 0;border:1px solid #e6e0d3;background:#faf8f1;border-radius:14px}.account-schedule-card label,.bbs-mode-field{display:grid;gap:8px;font-size:12px;color:#707763}.account-schedule-card .muted{font-size:11px;margin:0}</style>
