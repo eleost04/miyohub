@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -212,6 +213,7 @@ func (b BBSCheckin) state(ctx context.Context) (map[string]any, error) {
 // progress (e.g. sharing), so applying retries to every GET is not safe.
 // InspectState intentionally keeps its single-request diagnostic contract.
 func (b BBSCheckin) stateWithRetry(ctx context.Context) (map[string]any, error) {
+	retries := b.Config.Network.StateRetries()
 	for attempt := 0; ; attempt++ {
 		state, err := b.state(ctx)
 		if err == nil {
@@ -223,11 +225,28 @@ func (b BBSCheckin) stateWithRetry(ctx context.Context) (map[string]any, error) 
 		if ctx.Err() != nil || !retryableStateError(err) {
 			return state, err
 		}
-		if attempt >= 2 {
-			return nil, fmt.Errorf("网络连接或响应异常，任务状态查询重试后仍失败（这不是验证码错误；请检查服务器网络或稍后重试）: %w", err)
+		if attempt >= retries {
+			return nil, fmt.Errorf("米游币状态查询在 %d 次请求后仍失败（自动重试 %d 次；这不是验证码错误，请检查服务器网络或代理）: %w", attempt+1, attempt, err)
 		}
-		b.add(fmt.Sprintf("米游币任务状态查询遇到网络异常，%d 秒后进行第 %d/2 次重试（不重复签到或兑换）", attempt+1, attempt+1))
-		timer := time.NewTimer(time.Duration(attempt+1) * time.Second)
+		delay := time.Duration(1<<min(attempt, 3)) * time.Second
+		var status *mihoyo.HTTPStatusError
+		if errors.As(err, &status) && status.StatusCode == http.StatusTooManyRequests {
+			delay = max(delay, 30*time.Second)
+		}
+		if errors.As(err, &status) && status.RetryAfter != "" {
+			retryAfter := time.Duration(0)
+			if seconds, parseErr := strconv.Atoi(status.RetryAfter); parseErr == nil && seconds > 0 {
+				retryAfter = time.Duration(min(seconds, 86400)) * time.Second
+			} else if at, parseErr := http.ParseTime(status.RetryAfter); parseErr == nil {
+				retryAfter = time.Until(at)
+			}
+			if retryAfter > time.Minute {
+				return nil, fmt.Errorf("上游要求暂停查询超过一分钟，本次停止自动重试，请稍后查看任务状态: %w", err)
+			}
+			delay = max(delay, retryAfter)
+		}
+		b.add(fmt.Sprintf("米游币任务状态查询遇到网络异常，%.0f 秒后进行第 %d/%d 次重试（仅查询状态，不重发任务操作）", delay.Seconds(), attempt+1, retries))
+		timer := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -239,6 +258,13 @@ func (b BBSCheckin) stateWithRetry(ctx context.Context) (map[string]any, error) 
 
 func retryableStateError(err error) bool {
 	var networkError net.Error
+	var status *mihoyo.HTTPStatusError
+	if errors.As(err, &status) {
+		switch status.StatusCode {
+		case 408, 429, 500, 502, 503, 504:
+			return true
+		}
+	}
 	return errors.As(err, &networkError) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
 }
 

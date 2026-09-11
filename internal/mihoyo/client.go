@@ -67,7 +67,7 @@ func (c *Client) JSONWithHeaders(ctx context.Context, method, path string, query
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return response.Header, fmt.Errorf("mihoyo http %d", response.StatusCode)
+		return response.Header, &HTTPStatusError{StatusCode: response.StatusCode, RetryAfter: response.Header.Get("Retry-After")}
 	}
 	if out == nil {
 		return response.Header, nil
@@ -84,6 +84,15 @@ func (c *Client) JSONWithHeaders(ctx context.Context, method, path string, query
 	}
 	return response.Header, nil
 }
+
+// Carries status metadata without retaining response bodies or request URLs.
+// Retry policy belongs to callers, since some GET endpoints have side effects.
+type HTTPStatusError struct {
+	StatusCode int
+	RetryAfter string
+}
+
+func (e *HTTPStatusError) Error() string { return fmt.Sprintf("mihoyo http %d", e.StatusCode) }
 
 // URL errors include query-string credentials; keep only the underlying cause.
 func SafeNetworkError(err error) error {

@@ -10,7 +10,7 @@ import { reconcileCaptcha, useAutoSave } from '../autosave'
 import type { Config } from '../types'
 const props = defineProps<{ config: Config; admin: boolean }>()
 const emit = defineEmits<{ saved: []; navigate: [view: 'dashboard' | 'captcha' | 'notifications' | 'admin'] }>()
-function siteConfig(config: Config) { const { enabled, schedule, captcha, shop_exchange } = config; return JSON.parse(JSON.stringify({ enabled, schedule, captcha, shop_exchange: { enable: shop_exchange.enable, retry_seconds: shop_exchange.retry_seconds, retry_interval: shop_exchange.retry_interval } })) as Pick<Config, 'enabled' | 'schedule' | 'captcha'> & { shop_exchange: Omit<Config['shop_exchange'], 'plans'> } }
+function siteConfig(config: Config) { const { enabled, schedule, captcha, shop_exchange } = config; return JSON.parse(JSON.stringify({ enabled, schedule, captcha, network: { ...config.network, bbs_state_retries: config.network?.bbs_state_retries ?? 5 }, shop_exchange: { enable: shop_exchange.enable, retry_seconds: shop_exchange.retry_seconds, retry_interval: shop_exchange.retry_interval } })) as Pick<Config, 'enabled' | 'schedule' | 'captcha' | 'network'> & { shop_exchange: Omit<Config['shop_exchange'], 'plans'> } }
 const draft = ref(siteConfig(props.config)), baseline = ref(JSON.stringify(draft.value))
 const busy = ref(false), error = ref(''), notice = ref('')
 const dirty = computed(() => JSON.stringify(draft.value) !== baseline.value)
@@ -46,6 +46,10 @@ onUnmounted(() => window.removeEventListener('beforeunload', beforeUnload))
         <div class="check-grid"><label><input v-model="draft.schedule.enable" type="checkbox" />开启站点每日调度</label><label><input v-model="draft.schedule.run_on_start" type="checkbox" />服务启动时运行一次</label></div>
         <p class="muted">这是未设自定义时间的账号所用的默认调度。已设置个人时间的账号优先按自己的时间执行，不受此处默认调度开关影响。</p>
         <div class="form-grid"><label>默认签到时间<TimeField v-model="draft.schedule.time" label="默认签到时间" /></label><label>默认时区<input v-model="draft.schedule.timezone" required placeholder="Asia/Shanghai" /></label><label>默认调度随机延迟上限（分钟）<input v-model.number="draft.schedule.jitter_minutes" type="number" min="0" max="720" required /></label></div>
+      </article>
+      <article class="panel"><div class="panel-title"><div><p class="eyebrow">站点网络</p><h2>连接与重试</h2></div></div>
+        <label>米游币状态查询重试次数<input v-model.number="draft.network.bbs_state_retries" type="number" min="0" max="10" required /></label>
+        <p class="muted">默认重试 5 次（最多查询 6 次），设为 0 则不重试。只对网络异常或上游暂时不可用的状态查询生效，不重发签到、点赞、短信或兑换请求；验证码重试在下方单独配置。</p>
       </article>
       <article class="panel captcha-panel"><div class="panel-title"><div><p class="eyebrow">共享服务</p><h2>站点打码服务</h2></div><span class="pill soft">需单独授权</span></div><p class="muted">供已授权用户选择使用。个人渠道在「打码服务」里自行配置，不在这里共享。</p>
         <div class="captcha-policy"><label>站点验证码重试上限<input v-model.number="draft.captcha.max_retries" type="number" min="0" max="10" required /></label><p>这是站点服务的调用上限，用户可以设置更低的次数。设为 0 则停用站点自动打码。</p></div>

@@ -26,6 +26,7 @@ type Config struct {
 	Games      GamesConfig      `json:"games"`
 	CloudGames CloudGamesConfig `json:"cloud_games"`
 	BBS        BBSConfig        `json:"bbs"`
+	Network    NetworkConfig    `json:"network"`
 	Captcha    CaptchaConfig    `json:"captcha"`
 	Schedule   Schedule         `json:"schedule"`
 	Push       PushConfig       `json:"push"`
@@ -106,6 +107,18 @@ type BBSConfig struct {
 	CancelLike   bool  `json:"cancel_like"`
 	PostLimit    int   `json:"post_limit"`
 	DelaySeconds []int `json:"delay_seconds"`
+}
+
+type NetworkConfig struct {
+	// nil preserves the default for configurations created before this field.
+	BBSStateRetries *int `json:"bbs_state_retries,omitempty"`
+}
+
+func (n NetworkConfig) StateRetries() int {
+	if n.BBSStateRetries == nil {
+		return 5
+	}
+	return max(0, min(10, *n.BBSStateRetries))
 }
 
 type CaptchaConfig struct {

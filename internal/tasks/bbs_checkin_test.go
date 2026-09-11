@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/eleost04/miyohub/internal/mihoyo"
@@ -81,12 +82,54 @@ func TestBBSStateRetryBackoffIsCancellableAndWritesAreNotRetried(t *testing.T) {
 }
 
 func TestBBSStateRetryLimit(t *testing.T) {
-	client := mihoyo.NewClient("")
-	calls := 0
-	client.HTTP.Transport = roundTrip(func(*http.Request) (*http.Response, error) { calls++; return nil, io.ErrUnexpectedEOF })
-	_, err := (BBSCheckin{Client: client}).stateWithRetry(t.Context())
-	if err == nil || calls != 3 || !strings.Contains(err.Error(), "这不是验证码错误") {
-		t.Fatal("unbounded retry or misleading error", calls, err)
+	synctest.Test(t, func(t *testing.T) {
+		for _, retries := range []*int{nil, new(0), new(2), new(5), new(10)} {
+			client := mihoyo.NewClient("")
+			calls := 0
+			client.HTTP.Transport = roundTrip(func(*http.Request) (*http.Response, error) { calls++; return nil, io.ErrUnexpectedEOF })
+			cfg := model.Config{Network: model.NetworkConfig{BBSStateRetries: retries}}
+			_, err := (BBSCheckin{Client: client, Config: cfg}).stateWithRetry(t.Context())
+			if err == nil || calls != cfg.Network.StateRetries()+1 || !strings.Contains(err.Error(), "这不是验证码错误") {
+				t.Fatal("unbounded retry or misleading error", calls, err)
+			}
+		}
+	})
+}
+
+func TestBBSStateRetryHonorsHTTPBackoffAndDoesNotRetryPermanentErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name, retryAfter string
+		status           int
+		wantCalls        int
+		minWait          time.Duration
+	}{
+		{"temporary", "", 503, 2, time.Second},
+		{"rate-limit", "45", 429, 2, 45 * time.Second},
+		{"rate-limit-without-header", "", 429, 2, 30 * time.Second},
+		{"long-upstream-cooldown", "120", 429, 1, 0},
+		{"auth", "", 401, 1, 0},
+		{"forbidden", "", 403, 1, 0},
+		{"invalid-request", "", 400, 1, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				client, calls := mihoyo.NewClient(""), 0
+				client.HTTP.Transport = roundTrip(func(*http.Request) (*http.Response, error) {
+					calls++
+					r := reply(`{"retcode":0,"data":{}}`)
+					if calls == 1 {
+						r.StatusCode = tc.status
+						r.Header.Set("Retry-After", tc.retryAfter)
+					}
+					return r, nil
+				})
+				start := time.Now()
+				_, _ = (BBSCheckin{Client: client}).stateWithRetry(t.Context())
+				if calls != tc.wantCalls || time.Since(start) < tc.minWait {
+					t.Fatal("HTTP retry policy mismatch", calls, time.Since(start))
+				}
+			})
+		})
 	}
 }
 func TestBBSRunsOnlyRemainingMissions(t *testing.T) {

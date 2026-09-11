@@ -90,6 +90,8 @@ SMS login supports manual Geetest 3 and 4 challenges during both sending and cod
 
 ## Exchange timing and retries
 
+BBS mission-state reads retry up to five times by default (six requests in total). Administrators can set 0–10 retries under System settings → Connection and retries. Transient network/HTTP failures use 1/2/4/8-second backoff and honor `Retry-After`; a requested wait over one minute ends the current check. Authentication and captcha failures are not network retries. SMS, sign-in, likes and uncertain exchanges are never blindly replayed. Logs include actual retries and cancellation reasons.
+
 Reservations prepare approximately 180 seconds ahead. Different products can prepare together; actual requests for one account are serialized. Clock synchronization prefers the goods API's `now_time`, falls back to HTTP `Date`, and refreshes before opening. These timestamps are typically second-resolution; the UI reports their source and estimated uncertainty. Keep host NTP synchronized too. Network latency and stock competition cannot be eliminated.
 
 A booked sale round is distinguished from a later restock advertised by the upstream. Genuine postponements, sold-out stock and newly created reservations are validated separately; plans are not silently moved to another week.
