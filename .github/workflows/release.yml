@@ -1,0 +1,77 @@
+name: Publish signed release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing signed version tag, for example v0.0.1
+        required: true
+        type: string
+permissions:
+  contents: write
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Require a verified signed tag on the release branch
+        shell: bash
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(beta|rc)\.[1-9][0-9]*)?$ ]]
+          object=$(git rev-parse --verify "refs/tags/$RELEASE_TAG")
+          test "$(git cat-file -t "$object")" = tag
+          test "$(gh api "repos/$GH_REPO/git/tags/$object" --jq '.verification.verified')" = true
+          commit=$(git rev-parse "$object^{}")
+          test "$(git rev-parse HEAD)" = "$commit"
+          case "$RELEASE_TAG" in
+            *-beta.*|*-rc.*) git merge-base --is-ancestor "$commit" origin/develop ;;
+            *) git merge-base --is-ancestor "$commit" origin/main ;;
+          esac
+          node scripts/check-version.mjs "$RELEASE_TAG"
+          node scripts/check-repository.mjs
+      - run: go test -race ./... && go vet ./...
+      - run: node --test scripts/actions-state.test.mjs
+      - run: npm ci && npm run build && npx playwright install --with-deps chromium && npx playwright test
+        working-directory: web
+      - name: Build Linux archives without state or credentials
+        shell: bash
+        run: |
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            folder="dist/miyohub_${RELEASE_TAG}_linux_${arch}"
+            mkdir -p "$folder/web"
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -ldflags='-s -w' -o "$folder/miyohub" ./cmd/miyohub
+            cp -R web/dist "$folder/web/dist"
+            cp README.md README.en.md "$folder/"
+            tar -czf "$folder.tar.gz" -C "$folder" .
+          done
+          node scripts/release-notes.mjs "${RELEASE_TAG#v}" dist/RELEASE_NOTES.md
+          cd dist
+          sha256sum ./*.tar.gz > SHA256SUMS
+      - name: Publish an immutable release (no container push)
+        shell: bash
+        run: |
+          args=("$RELEASE_TAG" dist/*.tar.gz dist/SHA256SUMS --verify-tag --title "MiyoHub $RELEASE_TAG" --notes-file dist/RELEASE_NOTES.md)
+          case "$RELEASE_TAG" in *-*) args+=(--prerelease) ;; esac
+          gh release create "${args[@]}"

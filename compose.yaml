@@ -1,0 +1,27 @@
+name: miyohub
+
+services:
+  miyohub:
+    container_name: miyohub
+    build: .
+    image: miyohub:local
+    restart: unless-stopped
+    ports:
+      - "${MIYOHUB_BIND_ADDR:-127.0.0.1}:${MIYOHUB_HTTP_PORT:-5890}:5890"
+    environment:
+      MIYOHUB_PUBLIC_ORIGIN: "${MIYOHUB_PUBLIC_ORIGIN:-}"
+      MIYOHUB_SECURE_COOKIE: "${MIYOHUB_SECURE_COOKIE:-false}"
+      MIYOHUB_PUSH_ALLOW_PRIVATE: "${MIYOHUB_PUSH_ALLOW_PRIVATE:-false}"
+    volumes:
+      - miyohub-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 45s
+
+volumes:
+  miyohub-data:

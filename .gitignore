@@ -1,0 +1,70 @@
+# Local configuration; keep the shareable example.
+.env
+.env.*
+!.env.example
+/compose.override.yaml
+/compose.override.yml
+/docker-compose.override.yaml
+/docker-compose.override.yml
+
+# Account state, secrets, backups and temporary login images.
+data/
+/backup/
+/backups/
+/logs/
+/docs/
+state.json
+state.json.*
+*.key
+*.pem
+*.p12
+*.pfx
+.miyohub.lock
+.login-qr-*.png
+
+# Dependencies and generated build output.
+node_modules/
+.vite/
+*.tsbuildinfo
+/bin/
+/build/
+/dist/
+/web/dist/
+*.test
+*.exe
+
+# Test output and profiling data; test source stays versioned.
+coverage/
+.nyc_output/
+coverage*.out
+*.prof
+/web/test-results/
+/web/playwright-report/
+/test-results/
+/playwright-report/
+
+# Local caches, scratch files, editor and OS metadata.
+/tmp/
+/temp/
+/.cache/
+*.log
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Local executables, exported archives and auxiliary credential stores.
+/miyohub
+/secrets/
+credentials*.json
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.tar
+*.tar.gz
+*.zip
+*.7z

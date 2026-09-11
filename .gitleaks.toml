@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public BBS mission identifiers in synthetic test responses; not authentication keys"
+condition = "AND"
+paths = ['''^internal/tasks/bbs_checkin_test\.go$''']
+regexTarget = "secret"
+regexes = ['''^(bind_game_role_0|modify_signature_0)$''']

@@ -1,0 +1,24 @@
+[Unit]
+Description=MiyoHub check-in and exchange console
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+StateDirectory=miyohub
+StateDirectoryMode=0700
+WorkingDirectory=/opt/miyohub
+EnvironmentFile=-/etc/miyohub/environment
+ExecStart=/opt/miyohub/bin/miyohub serve --host 127.0.0.1 --data-dir /var/lib/miyohub --web-dir /opt/miyohub/web/dist
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=45s
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

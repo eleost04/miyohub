@@ -1,0 +1,60 @@
+name: One-shot check-in
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 本次任务范围（始终遵守已保存的任务开关）
+        type: choice
+        options: [all, games, bbs]
+        default: all
+      account:
+        description: 可选账号名称或 ID
+        type: string
+        default: ''
+      user:
+        description: 可选站内用户名；同名账号时须填写
+        type: string
+        default: ''
+  schedule:
+    # 09:20 Asia/Shanghai. Scheduled runs require the repository variable below.
+    - cron: '20 1 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: miyohub-checkin-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  checkin:
+    if: github.event_name == 'workflow_dispatch' || vars.MIYOHUB_ENABLE_CHECKIN == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Restore private one-shot state
+        run: node scripts/actions-state.mjs
+        env:
+          MIYOHUB_STATE_B64: ${{ secrets.MIYOHUB_STATE_B64 }}
+          MIYOHUB_KEY_B64: ${{ secrets.MIYOHUB_KEY_B64 }}
+      - name: Run selected tasks without exchanges or notifications
+        shell: bash
+        env:
+          CHECKIN_MODE: ${{ inputs.mode || 'all' }}
+          CHECKIN_ACCOUNT: ${{ inputs.account }}
+          CHECKIN_USER: ${{ inputs.user }}
+        run: |
+          args=(run --json)
+          case "$CHECKIN_MODE" in
+            games) args+=(--games-only) ;;
+            bbs) args+=(--bbs-only) ;;
+            all) ;;
+            *) exit 1 ;;
+          esac
+          if [ -n "$CHECKIN_ACCOUNT" ]; then args+=(--account "$CHECKIN_ACCOUNT"); fi
+          if [ -n "$CHECKIN_USER" ]; then args+=(--user "$CHECKIN_USER"); fi
+          go run ./cmd/miyohub "${args[@]}"
+      # Do not upload state, keys, logs, or QR images as artifacts.
