@@ -17,9 +17,15 @@ function receive(event: MessageEvent) {
   if (data.type === 'miyohub:captcha:loaded') { loading.value = false; failed.value = false; window.clearTimeout(timer) }
   if (data.type === 'miyohub:captcha:error') { loading.value = false; failed.value = true; window.clearTimeout(timer) }
   if (data.type === 'miyohub:captcha:height' && Number.isFinite(data.height)) height.value = Math.min(620, Math.max(140, data.height))
-  if (data.type === 'miyohub:captcha:solution' && !props.busy && !submitted && remaining.value && typeof data.challenge === 'string' && typeof data.validate === 'string') {
-    submitted = true
-    emit('solved', { id: props.challenge.id, challenge: data.challenge, validate: data.validate })
+  if (data.type === 'miyohub:captcha:solution' && !props.busy && !submitted && remaining.value) {
+    if (props.challenge.version === 4) {
+      if (typeof data.captcha_id !== 'string' || data.captcha_id !== props.challenge.gt || typeof data.lot_number !== 'string' || typeof data.captcha_output !== 'string' || typeof data.pass_token !== 'string' || typeof data.gen_time !== 'string') return
+      submitted = true
+      emit('solved', { id: props.challenge.id, captcha_id: data.captcha_id, lot_number: data.lot_number, captcha_output: data.captcha_output, pass_token: data.pass_token, gen_time: data.gen_time })
+    } else if (typeof data.challenge === 'string' && typeof data.validate === 'string') {
+      submitted = true
+      emit('solved', { id: props.challenge.id, challenge: data.challenge, validate: data.validate })
+    }
   }
 }
 function reload() { submitted = false; loading.value = true; failed.value = false; generation.value++; window.clearTimeout(timer); timer = window.setTimeout(() => { failed.value = true; loading.value = false }, 22000) }

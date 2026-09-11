@@ -6,8 +6,8 @@ export interface TaskSummary { success: number; failed: number; skipped: number;
 export interface TaskProgress { account_id: string; state: string; current: string; started_at: string }
 export interface TaskRunSelection { account_ids: string[]; games_only?: boolean; bbs_only?: boolean; games?: string[] }
 export interface LoginState { running: boolean; status: string; qr_url: string; error: string; account: string; account_id?: string }
-export interface SMSChallenge { id: string; gt: string; challenge: string; new_captcha: boolean; expires_at: string; operation: 'send' | 'verify' }
-export interface SMSCaptchaSolution { id: string; challenge: string; validate: string }
+export interface SMSChallenge { id: string; version?: 3 | 4; gt: string; challenge?: string; risk_type?: string; session_id?: string; new_captcha: boolean; expires_at: string; operation: 'send' | 'verify' }
+export type SMSCaptchaSolution = { id: string } & ({ challenge: string; validate: string } | { captcha_id: string; lot_number: string; captcha_output: string; pass_token: string; gen_time: string })
 export interface SMSState { status: 'idle' | 'sending' | 'captcha_required' | 'sent' | 'verifying' | 'verified' | 'failed'; message: string; phone: string; retry_at: string; expires_at: string; challenge?: SMSChallenge }
 export interface Account { id: string; name: string; user_id: string; stuid: string; disabled: boolean; status: string; checked_at: string; has_cookie: boolean; has_stoken: boolean; cloud_configured: string[]; task_results: Record<string, TaskSummary>; last_task_at: string; task_settings: AccountTaskSettings; exchange_allowed: boolean }
 export interface AccountTaskSettings { revision: number; automatic: boolean; schedule?: { time: string; timezone: string } | null; features: Config['features']; games: Config['games']; cloud_games: Config['cloud_games']; bbs: Config['bbs'] }

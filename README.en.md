@@ -86,7 +86,7 @@ Optional Bearer authentication is supported; never put credentials in the URL. P
 
 Anonymous probes run in the background, survive browser disconnection, and retain a redacted result. They are limited to once per user per minute and approximately 65 seconds. Polling does not call the provider again. Probes do not use Damagou or run account tasks, although a custom provider may charge for requests. Producing validation parameters is not proof of acceptance for a real account.
 
-SMS human verification can be completed manually in an isolated, lazily loaded page, or through a configured automatic provider. SMS sessions last ten minutes; interactive challenges last two. Restarting requires a new session. Failed sends and cooldowns are not reported as successful sends. Real SMS, QR and risk-control compatibility must be validated with the account owner's own session.
+SMS login supports manual Geetest 3 and 4 challenges during both sending and code verification, using an isolated, lazily loaded page. Geetest 3 may also use a configured automatic provider; V4 challenges are never sent to V3-only services. SMS sessions last ten minutes and interactive challenges at most two. Restarting requires a new session. Failed sends and cooldowns are not reported as successful sends. Live risk-control compatibility still requires the account owner's acceptance.
 
 ## Exchange timing and retries
 
