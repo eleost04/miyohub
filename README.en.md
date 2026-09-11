@@ -110,6 +110,8 @@ Every user controls automatic delivery, task/exchange categories, error-only fil
 
 “Accepted by the notification service” means the provider acknowledged the request, not that a device received or read it. Official QQ setup happens on the official QR page. After WeChat binding, send the bot a message to establish a session. Provider permissions, session expiry and quotas still apply.
 
+The official QQ Connect button waits for an online gateway session. After credentials are bound, MiyoHub authenticates, maintains heartbeats and reconnects with bounded backoff. Channel settings and logs report connecting, online and retry reasons. Connectivity is independent of notification switches: deleting the channel, clearing ClientSecret or disabling its owner disconnects the bot. Chat content is neither stored nor answered, and incoming messages never change the configured recipient. The server needs outbound official QQ HTTPS/WSS access. If MiyoHub reports online but the official page still cannot finish, check the QQ client, network and bot permissions; this alone does not establish a HarmonyOS issue.
+
 Preferences autosave about one second after editing stops, with a browser-local opt-out. Secrets are not stored in browser storage. Credentials, passwords, permissions, new channels and exchange plans require explicit confirmation. The mobile floating save action appears only for unsaved edits without another visible save action. Back closes selectors, dialogs and details before navigating away.
 
 ## Performance and resources

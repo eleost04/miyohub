@@ -25,6 +25,7 @@ RUN apk add --no-cache ca-certificates tzdata \
 WORKDIR /app
 COPY --from=backend /out/miyohub /usr/local/bin/miyohub
 COPY --from=frontend /src/web/dist/ /app/web/dist/
+COPY THIRD_PARTY_NOTICES.md /app/THIRD_PARTY_NOTICES.md
 ENV MIYOHUB_DATA_DIR=/data MIYOHUB_HOST=0.0.0.0 MIYOHUB_PORT=5890
 USER miyohub
 VOLUME ["/data"]

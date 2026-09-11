@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	qrcode "github.com/skip2/go-qrcode"
 	"github.com/eleost04/miyohub/internal/model"
+	qrcode "github.com/skip2/go-qrcode"
 )
 
 type BindingState struct {
@@ -45,6 +45,7 @@ type BindingStore interface {
 	BindPushChannel(string, string, int, model.PushChannel) (string, error)
 }
 type Bindings struct {
+	OnBound      func()
 	store        BindingStore
 	sender       Sender
 	mu           sync.Mutex
@@ -211,6 +212,9 @@ func (m *Bindings) run(s *bindingSession) {
 			if channel.OpenID == "" {
 				s.state.Message = "机器人凭据已绑定，但官方未返回接收者 OpenID；请补充 OpenID 后启用渠道"
 			}
+			if m.OnBound != nil {
+				m.OnBound()
+			}
 			return
 		}
 	}
@@ -279,7 +283,7 @@ func (m *Bindings) qq(s *bindingSession) (model.PushChannel, error) {
 				}
 				appID = n.String()
 			}
-			return model.PushChannel{Provider: "qqbot", AppID: appID, ClientSecret: secret, OpenID: result.Data.OpenID, BindingState: "ready"}, nil
+			return model.PushChannel{Provider: "qqbot", AppID: appID, ClientSecret: secret, OpenID: result.Data.OpenID, BindingState: "connecting"}, nil
 		}
 	}
 	return model.PushChannel{}, s.ctx.Err()

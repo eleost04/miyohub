@@ -29,6 +29,7 @@ func (s *Server) pushConfig(w http.ResponseWriter, r *http.Request, user model.U
 			writeError(w, status, err)
 			return
 		}
+		s.qqbot.Wake()
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "data": result})
 	default:
 		methodNotAllowed(w)

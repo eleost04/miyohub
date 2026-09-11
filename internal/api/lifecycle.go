@@ -9,6 +9,7 @@ func (s *Server) cancelUserWork(id string) {
 	s.qr.Cancel(id)
 	s.sms.Cancel(id)
 	s.pushBindings.Cancel(id, "")
+	s.qqbot.CancelUser(id)
 	for _, a := range s.store.AccountsForUser(id, false) {
 		s.cancelAccountWork(a.ID)
 	}

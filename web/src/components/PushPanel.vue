@@ -49,6 +49,7 @@ const options = [
 ] as const
 const deliveryLabels: Record<string, string> = { pending: '等待发送', sending: '发送中', accepted: '服务已接收', failed: '发送失败', unknown: '发送结果待确认', skipped: '已跳过' }
 const bindingLabels: Record<string, string> = { ready: '通知会话已就绪', waiting_message: '请先在微信发送一条消息', expired: '登录已过期，请重新扫码', reconnecting: '连接中断，正在重连' }
+const qqLabels: Record<string, string> = { connecting: '正在连接 QQ 网关', ready: 'QQ 机器人已上线', reconnecting: 'QQ 连接中断，正在重试', disconnected: 'QQ 网关已断开', error: 'QQ 连接需要处理' }
 defineExpose({ dirty, flush: autosave.flush })
 
 function channelFields(channel: ChannelDraft) { return channel.provider === 'wechat_claw' && channel.mode === 'ilink' ? [] : providerInfo(channel.provider).fields }
@@ -200,10 +201,13 @@ onUnmounted(() => { active = false; window.clearInterval(activityTimer); control
                 <label v-if="mobile || dialogChannel === channel.ui_key" class="push-master push-channel-master"><span><strong>启用这个接收渠道</strong><small>{{ draft.enable ? '保存后接收已勾选的任务结果。' : '自动推送当前关闭，保存渠道不会打开总开关。' }}</small></span><span class="push-switch"><input v-model="channel.enable" type="checkbox" aria-label="启用这个接收渠道" /><span aria-hidden="true"></span></span></label>
                 <p class="push-channel-hint">{{ providerInfo(channel.provider).hint }}</p>
                 <div v-if="channel.provider === 'qqbot' || channel.provider === 'wechat_claw'" class="push-binding-status">
+                  <span v-if="channel.provider === 'qqbot'" class="pill" :class="{ soft: (bindingStates[channel.id] || channel.binding_state) === 'ready' }">{{ qqLabels[bindingStates[channel.id] || channel.binding_state] || '等待 QQ 连接状态' }}</span>
                   <span v-if="channel.provider === 'wechat_claw' && channel.mode === 'ilink'" class="pill" :class="{ soft: channel.enable && bindingStates[channel.id] === 'ready' }">{{ !channel.enable ? '渠道已关闭 · 接收已暂停' : bindingLabels[bindingStates[channel.id] || channel.binding_state] || '等待连接' }}</span>
                   <button type="button" class="small-button" :disabled="dirty || !channel.id" @click="openBinding(channel.provider, channel.id)"><AppIcon name="scan" :size="15" />{{ channel.configured.includes('token') || channel.configured.includes('client_secret') ? '重新扫码绑定' : '扫码配置' }}</button>
                 </div>
                 <p v-if="channel.provider === 'wechat_claw' && channel.mode === 'ilink'" class="push-channel-hint">绑定用户：{{ channel.openid || '尚未绑定' }}。启用渠道时会保持官方消息连接；关闭渠道即可停止连接。</p>
+                <p v-if="channel.provider === 'qqbot'" class="push-channel-hint">绑定后保持 QQ 官方连接，不回复或保存聊天。渠道开关只控制通知发送；删除渠道或清除 ClientSecret 后断开连接。</p>
+                <p v-if="channel.provider === 'qqbot' && (bindingErrors[channel.id] ?? channel.binding_error)" class="error-text" role="status">{{ bindingErrors[channel.id] ?? channel.binding_error }}</p>
                 <p v-if="channel.provider === 'wechat_claw' && channel.mode === 'ilink' && channel.enable && (bindingErrors[channel.id] ?? channel.binding_error)" class="error-text" role="status">{{ bindingErrors[channel.id] ?? channel.binding_error }}</p>
                 <div class="push-input-grid">
                   <label class="push-input"><span>渠道名称</span><input v-model="channel.name" maxlength="64" required :aria-label="providerInfo(channel.provider).name + ' 渠道名称'" /></label>

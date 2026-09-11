@@ -36,6 +36,7 @@ type Server struct {
 	push         *notify.Dispatcher
 	pushBindings *notify.Bindings
 	weixin       *notify.WeixinMonitor
+	qqbot        *notify.QQMonitor
 	probes       captchaProbes
 }
 
@@ -51,6 +52,8 @@ func NewServerWithOptions(s *store.Store, options Options) *Server {
 	server.push = notify.NewDispatcher(s, sender)
 	server.pushBindings = notify.NewBindings(s, sender)
 	server.weixin = notify.NewWeixinMonitor(s, sender)
+	server.qqbot = notify.NewQQMonitor(s, sender)
+	server.pushBindings.OnBound = server.qqbot.Wake
 	server.runner.Notify = server.push.Enqueue
 	server.exchange.Notify = server.push.Enqueue
 	server.scheduler = scheduler.New(s.Config().Schedule, func(ctx context.Context) error {
@@ -81,6 +84,7 @@ func (s *Server) Start() error {
 		return err
 	}
 	s.weixin.Start()
+	s.qqbot.Start()
 	s.exchange.Start()
 	return nil
 }
@@ -94,6 +98,7 @@ func (s *Server) Stop() {
 	s.scheduler.Stop()
 	s.exchange.Stop()
 	s.pushBindings.Stop()
+	s.qqbot.Stop()
 	s.weixin.Stop()
 	s.push.Stop()
 }
