@@ -258,6 +258,36 @@ func TestBBSNewRulesOnboardingRowsDoNotSuppressCommunitySignIn(t *testing.T) {
 	}
 }
 
+func TestBBSDiagnosticsExplainMissingMissionsWithoutDumpingUpstreamData(t *testing.T) {
+	queries := 0
+	messages := []string{}
+	client := mihoyo.NewClient("")
+	client.HTTP.Transport = roundTrip(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == mihoyo.BBSStatePath {
+			queries++
+			if queries == 1 {
+				return reply(`{"retcode":0,"data":{"already_received_points":0,"can_get_points":50,"total_points":2000,"private_field":"DO_NOT_LOG_UPSTREAM","states":[{"mission_id":64,"name":"DO_NOT_LOG_NAME"},{"mission_id":62}]}}`), nil
+			}
+			return reply(`{"retcode":0,"data":{"already_received_points":50,"can_get_points":0,"total_points":2050,"states":[]}}`), nil
+		}
+		if r.URL.Path != mihoyo.BBSSignPath {
+			t.Error("diagnostics triggered an interaction", r.URL.Path)
+		}
+		return reply(`{"retcode":0,"data":{}}`), nil
+	})
+	cfg := model.Config{BBS: model.BBSConfig{Forums: []int{2}, Checkin: true, Read: true, Like: true, Share: false, DelaySeconds: []int{0, 0}}}
+	result := (BBSCheckin{Client: client, Config: cfg, Emit: func(line string) { messages = append(messages, line) }}).Run(t.Context())
+	log := strings.Join(messages, "\n")
+	for _, want := range []string{"任务 ID：62、64", "看帖开启", "点赞开启", "分享关闭", "看帖：任务列表未返回对应项目（ID 59），本次跳过", "点赞：任务列表未返回对应项目（ID 60），本次跳过", "分享：账号设置未开启，本次跳过", "米游币本次新增 50"} {
+		if !strings.Contains(log, want) {
+			t.Fatal("missing diagnostic reason", want, log)
+		}
+	}
+	if strings.Contains(log, "DO_NOT_LOG") || queries != 2 || result.Success != 1 || result.Failed != 0 {
+		t.Fatal("diagnostics changed execution or exposed upstream fields", result, queries)
+	}
+}
+
 func TestBBSDoesNotClaimSuccessWithoutPointsOrRemainingMissionCompletion(t *testing.T) {
 	client := mihoyo.NewClient("")
 	messages := []string{}

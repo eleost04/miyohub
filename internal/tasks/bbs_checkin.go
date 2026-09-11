@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -74,6 +75,7 @@ func (b BBSCheckin) Run(ctx context.Context) model.TaskSummary {
 	}
 	initial := intValue(state["already_received_points"])
 	b.add(fmt.Sprintf("今日已得 %d，还可获得 %d，余额 %d", initial, intValue(state["can_get_points"]), intValue(state["total_points"])))
+	b.describeMissions(state)
 	if state["can_get_points"] != nil && intValue(state["can_get_points"]) == 0 {
 		summary.Skipped++
 		summary.Status = "already_complete"
@@ -94,9 +96,9 @@ func (b BBSCheckin) Run(ctx context.Context) model.TaskSummary {
 			summary.Skipped++
 			switch {
 			case !m.enabled:
-				b.add(m.label + "未启用，跳过")
+				b.add(m.label + "：账号设置未开启，本次跳过")
 			case !m.present:
-				b.add(m.label + "：当前上游未提供该互动任务，跳过")
+				b.add(fmt.Sprintf("%s：任务列表未返回对应项目（ID %d），本次跳过", m.label, m.id))
 			default:
 				b.add(m.label + "已完成，跳过")
 			}
@@ -192,6 +194,50 @@ func (b BBSCheckin) Run(ctx context.Context) model.TaskSummary {
 		}
 	}
 	return summary
+}
+
+// Record only bounded numeric mission identifiers and local switches, never
+// raw upstream payloads, mission names, request headers or account credentials.
+func (b BBSCheckin) describeMissions(state map[string]any) {
+	ids := []int{}
+	seen := map[int]bool{}
+	for _, raw := range maps(state["states"]) {
+		id := intValue(raw["mission_id"])
+		if id > 0 && id <= 1_000_000 && !seen[id] && len(ids) < 20 {
+			ids = append(ids, id)
+			seen[id] = true
+		}
+	}
+	sort.Ints(ids)
+	values := []string{}
+	for _, id := range ids {
+		values = append(values, strconv.Itoa(id))
+	}
+	if len(values) > 0 {
+		b.add("米游币任务列表：本次返回的任务 ID：" + strings.Join(values, "、") + "；未列出的互动项目不执行")
+	} else {
+		note := "任务列表没有可识别的任务 ID"
+		switch rows := state["states"].(type) {
+		case nil:
+			note = "上游未返回任务列表"
+		case []any:
+			if len(rows) == 0 {
+				note = "上游任务列表为空"
+			}
+		default:
+			note = "上游任务列表格式异常"
+		}
+		b.add("米游币任务列表：" + note + "；未列出的互动项目不执行，不代表程序不支持")
+	}
+	switches := []string{}
+	for _, m := range missions(state, b.Config.BBS) {
+		label := m.label + "关闭"
+		if m.enabled {
+			label = m.label + "开启"
+		}
+		switches = append(switches, label)
+	}
+	b.add("米游币任务设置：" + strings.Join(switches, "、"))
 }
 
 func (b BBSCheckin) state(ctx context.Context) (map[string]any, error) {
