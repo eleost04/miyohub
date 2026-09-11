@@ -1,6 +1,6 @@
 # MiyoHub
 
-[English](README.en.md) · 当前版本：**0.0.1**
+[English](README.en.md) · 当前版本：**0.1.0-beta.1**
 
 [功能看板](ROADMAP.md) · [参与开发与维护规范](CONTRIBUTING.md) · [问题反馈](https://github.com/eleost04/miyohub/issues)
 
@@ -17,12 +17,14 @@
 
 站点用户是权限边界：管理员也不能在日常页面访问其他用户的米游社账号、私人日志和兑换计划。用户管理与系统设置分别在独立页面。
 
+本版本为 Beta：短信、米游币请求、QQ 网关与兑换兼容性已通过隔离回归，真实账号风控和客户端仍需验收，详见看板。`main` 保持稳定基线，测试版从签名标签或 `develop` 获取。
+
 ## 快速开始
 
 需要 Docker Engine 和 Compose v2。
 
 ```bash
-git clone https://github.com/eleost04/miyohub.git
+git clone --branch v0.1.0-beta.1 --depth 1 https://github.com/eleost04/miyohub.git
 cd miyohub
 cp .env.example .env
 docker compose up -d --build
@@ -176,3 +178,5 @@ Git 保留源码、必要测试、依赖锁文件、构建 / CI 配置和双语 
 [MiyoQian](https://github.com/ytf211/MiyoQian)、[MiyoSign](https://github.com/ytf211/miyosign) 与 [MihoyoBBSTools](https://github.com/Womsxd/MihoyoBBSTools) 提供了接口和功能设计参考；验证码服务参考 [相关讨论](https://github.com/Womsxd/MihoyoBBSTools/issues/198) 与 [test_nine](https://github.com/luguoyixiazi/test_nine)。
 
 本项目与米哈游及上述项目无官方隶属关系。第三方代码、模型和服务遵循各自条款；功能参考不代表可以忽略其许可或使用限制。
+
+安装包与容器携带 [第三方许可说明](THIRD_PARTY_NOTICES.md)；这不改变项目本身、验证码模型或外部服务的许可范围。

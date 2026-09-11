@@ -2,7 +2,7 @@
 
 [Feature board](ROADMAP.md) · [Contributing and maintenance](CONTRIBUTING.md) · [Issues](https://github.com/eleost04/miyohub/issues)
 
-[简体中文](README.md) · Version **0.0.1**
+[简体中文](README.md) · Version **0.1.0-beta.1**
 
 Self-hosted MiYouShe check-ins, community coin tasks and merchandise exchange management, built with Go and Vue 3. This is not an official HoYoverse product. Upstream APIs, account challenges and stock can change; task rewards and successful exchanges are not guaranteed.
 
@@ -17,12 +17,14 @@ Self-hosted MiYouShe check-ins, community coin tasks and merchandise exchange ma
 
 A site user is the ownership boundary. Administrators cannot browse another user's game accounts, private logs or reservations in the task workspace. System settings and user administration are separate.
 
+This is a Beta. Isolated regressions cover SMS, BBS requests, QQ gateways and exchange compatibility; live account risk controls and clients still need acceptance, as recorded on the board. `main` keeps the stable baseline; use a signed pre-release tag or `develop` for this test version.
+
 ## Quick start
 
 Requires Docker Engine and Compose v2.
 
 ```bash
-git clone https://github.com/eleost04/miyohub.git
+git clone --branch v0.1.0-beta.1 --depth 1 https://github.com/eleost04/miyohub.git
 cd miyohub
 cp .env.example .env
 docker compose up -d --build
@@ -176,3 +178,5 @@ Versioned content is limited to core source, necessary tests, dependency locks, 
 [MiyoQian](https://github.com/ytf211/MiyoQian), [MiyoSign](https://github.com/ytf211/miyosign) and [MihoyoBBSTools](https://github.com/Womsxd/MihoyoBBSTools) inform API compatibility and feature design. Captcha references include [this discussion](https://github.com/Womsxd/MihoyoBBSTools/issues/198) and [test_nine](https://github.com/luguoyixiazi/test_nine).
 
 This project is not affiliated with miHoYo or the projects above. Third-party code, models and services remain subject to their respective terms; referencing a project does not grant additional rights.
+
+Archives and containers include [third-party notices](THIRD_PARTY_NOTICES.md); these do not expand the licensing scope of MiyoHub, external services or captcha models.
