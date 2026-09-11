@@ -157,7 +157,7 @@ npm --prefix web ci
 npm --prefix web run build
 go test -race ./...
 go vet ./...
-node --test scripts/actions-state.test.mjs
+node --test scripts/*.test.mjs
 node scripts/check-version.mjs
 node scripts/check-repository.mjs
 cd web
@@ -170,6 +170,8 @@ Real-API browser scenarios each use their own process, temporary encrypted state
 See [CONTRIBUTING.md](CONTRIBUTING.md) for focused changes, `fix` / `feat` commits, GPG signatures, branches, version increments and release gates. [ROADMAP.md](ROADMAP.md) tracks capabilities, known issues and comparison with reference projects. User-facing changes appear in the in-app changelog.
 
 Release automation verifies signed tags and branch ancestry, then builds Linux amd64/arm64 archives with frontend assets. Arm64 is cross-compiled but not hardware-validated. Test and release workflows support manual recovery without skipping checks or overwriting existing releases.
+
+GitHub Actions never runs account check-ins, exchanges or notifications and does not need account state or keys. Schedule daily tasks on your own Docker host / server. CI runs for pushes to `main` / `develop`, PRs targeting them, and manual requests. Documentation-only changes retain secret and repository checks but skip Go, browser and Docker builds. Validate feature commits locally, push them, then open a PR for CI validation.
 
 Versioned content is limited to core source, necessary tests, dependency locks, build/CI configuration and bilingual README files. Exclusions include real `.env*` files, data/state/keys, `docs/`, backups, logs, dependencies, build products, browser reports and archives. The companion also excludes upstream checkouts, model weights and challenge images. History secret scanning supplements, not replaces, review before committing.
 

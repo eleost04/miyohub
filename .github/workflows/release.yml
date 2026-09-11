@@ -9,12 +9,14 @@ on:
         required: true
         type: string
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 jobs:
   release:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -22,15 +24,15 @@ jobs:
       GH_REPO: ${{ github.repository }}
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: refs/tags/${{ inputs.tag || github.ref_name }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: npm
@@ -51,7 +53,7 @@ jobs:
           node scripts/check-version.mjs "$RELEASE_TAG"
           node scripts/check-repository.mjs
       - run: go test -race ./... && go vet ./...
-      - run: node --test scripts/actions-state.test.mjs
+      - run: node --test scripts/*.test.mjs
       - run: npm ci && npm run build && npx playwright install --with-deps chromium && npx playwright test
         working-directory: web
       - name: Build Linux archives without state or credentials

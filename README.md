@@ -157,7 +157,7 @@ npm --prefix web ci
 npm --prefix web run build
 go test -race ./...
 go vet ./...
-node --test scripts/actions-state.test.mjs
+node --test scripts/*.test.mjs
 node scripts/check-version.mjs
 node scripts/check-repository.mjs
 cd web
@@ -170,6 +170,8 @@ npm run test:e2e
 贡献流程、`fix` / `feat` 提交规则、GPG 签名、分支职责、版本递增和发布检查见 [CONTRIBUTING.md](CONTRIBUTING.md)。功能范围、已知问题及与参考项目的差异见 [ROADMAP.md](ROADMAP.md)。站内「更新日志」记录面向用户的改动。
 
 发布流程检查签名标签和分支归属，构建包含前端资源的 Linux amd64 / arm64 安装包；arm64 仅交叉构建，尚未进行硬件验收。Actions 的测试与发布工作流均支持手动恢复，不跳过检查，不覆盖已有 Release。
+
+GitHub Actions **不运行任何账号签到、兑换或推送**，也不需要上传账号状态或密钥。日常任务请在自己的 Docker / 主机上调度。CI 只在 `main` / `develop` 推送、面向这两个分支的 PR 或手动操作时运行；纯文档改动保留凭据扫描与仓库检查，跳过 Go / 浏览器 / Docker 重型测试。特性分支提交先在本地验证并推送，建立 PR 后再由 CI 检查。
 
 Git 保留源码、必要测试、依赖锁文件、构建 / CI 配置和双语 README。排除 `.env*`（示例除外）、`data/`、状态及密钥、`docs/`、备份、日志、依赖目录、构建产物、浏览器测试报告和压缩归档；伴随打码仓库还排除 `models/`、`upstream/` 和验证码图片。版本流程扫描提交历史中的凭据；不要用忽略规则代替提交前检查。
 

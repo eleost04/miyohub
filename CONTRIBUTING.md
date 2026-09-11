@@ -59,7 +59,11 @@ Risk: Actual permission revocation must still stop further requests.
 
 ## 验证门槛
 
-后端：`go test -race ./...`、`go vet ./...`。流程与仓库边界：`node --test scripts/actions-state.test.mjs`、`node scripts/check-version.mjs`、`node scripts/check-repository.mjs`。前端：`npm --prefix web ci`、`npm --prefix web run build`，然后在 `web` 目录运行 `npx playwright test`。
+后端：`go test -race ./...`、`go vet ./...`。流程与仓库边界：`node --test scripts/*.test.mjs`、`node scripts/check-version.mjs`、`node scripts/check-repository.mjs`。前端：`npm --prefix web ci`、`npm --prefix web run build`，然后在 `web` 目录运行 `npx playwright test`。
+
+CI 是验证流水线，不是提交类型或目标分支：用户功能使用 `feat`，修复用 `fix`，文档用 `docs`；只有修改工作流才用 `ci`。每个小改动本地验证成功后立即签名提交并推送自己的特性分支，准备集成时提出面向 `develop` 的 PR。`main` / `develop` 的推送与 PR 保留自动 CI；纯文档改动只运行仓库、版本与凭据检查，手动 CI 始终运行完整验证。
+
+不提供 GitHub 签到工作流，不将账号状态、Cookie 或加密密钥放入 Actions Secrets。签到、兑换和推送仅由自有主机运行；CI / Release 使用隔离模拟数据。修改工作流时固定第三方 Action 的完整提交 SHA，并核对来源，保持最小权限，不使用 `pull_request_target` 执行贡献者代码。
 
 浏览器测试使用独立临时状态及原有鉴权，不关闭生产限流，不复用生产账号。至少覆盖 320/390 像素手机及桌面布局，检查弹窗、返回、自动保存、键盘操作和首屏资源预算。
 
