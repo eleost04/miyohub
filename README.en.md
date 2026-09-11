@@ -100,6 +100,8 @@ The proxy covers miHoYo login, game/cloud sign-in, BBS, shop/exchange and clock 
 
 Reservations prepare approximately 180 seconds ahead. Different products can prepare together; actual requests for one account are serialized. Clock synchronization prefers the goods API's `now_time`, falls back to HTTP `Date`, and refreshes before opening. These timestamps are typically second-resolution; the UI reports their source and estimated uncertainty. Keep host NTP synchronized too. Network latency and stock competition cannot be eliminated.
 
+Exchange requests use the owning account's device and web fingerprint. Fingerprint creation supplies platform-5 environment fields without account cookies. Addresses, game roles, balance and price are revalidated before submission; payloads follow the MiyoQian exchange flow. Successful preparation is not a successful purchase.
+
 A booked sale round is distinguished from a later restock advertised by the upstream. Genuine postponements, sold-out stock and newly created reservations are validated separately; plans are not silently moved to another week.
 
 Temporary explicit rejections may retry within the configured window: at most 60 requests, minimum 0.2-second interval, and at least two seconds of backoff for rate-limit responses. A zero window sends only once. Insufficient balance, purchase limits, stock exhaustion, expired authentication and invalid parameters stop the run. Timeouts, connection loss and malformed responses are **uncertain outcomes and are never automatically replayed**. Check MiYouShe exchange records first to avoid duplicate spending. Expiry prevents new attempts but allows an in-flight result to finish. Notifications contain the final summary; logs retain attempts and return codes.
