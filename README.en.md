@@ -112,6 +112,8 @@ Every user controls automatic delivery, task/exchange categories, error-only fil
 
 The official QQ Connect button waits for an online gateway session. After credentials are bound, MiyoHub authenticates, maintains heartbeats and reconnects with bounded backoff. Channel settings and logs report connecting, online and retry reasons. Connectivity is independent of notification switches: deleting the channel, clearing ClientSecret or disabling its owner disconnects the bot. Chat content is neither stored nor answered, and incoming messages never change the configured recipient. The server needs outbound official QQ HTTPS/WSS access. If MiyoHub reports online but the official page still cannot finish, check the QQ client, network and bot permissions; this alone does not establish a HarmonyOS issue.
 
+QQ/WeChat QR tasks stay active on the server for five minutes. Closing a dialog, switching apps or reloading does not cancel the task; reopening the same entry resumes it without extending its expiry or creating another QR. Cancel invalidates it; Refresh explicitly replaces it. Changing notification settings requires a new task. Each user has one active task, and a server restart clears unfinished tasks, not saved channels. QQ credential storage and gateway readiness are reported separately.
+
 Preferences autosave about one second after editing stops, with a browser-local opt-out. Secrets are not stored in browser storage. Credentials, passwords, permissions, new channels and exchange plans require explicit confirmation. The mobile floating save action appears only for unsaved edits without another visible save action. Back closes selectors, dialogs and details before navigating away.
 
 ## Performance and resources

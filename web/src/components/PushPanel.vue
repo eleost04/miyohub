@@ -65,7 +65,12 @@ async function syncActivity() {
   activityBusy = true
   try {
     const [records, config] = await Promise.all([api<PushDelivery[]>('/api/v1/push/history', { signal: controller.signal }), api<PushSettings>('/api/v1/push/config', { signal: controller.signal })])
-    if (active) { history.value = records; historyError.value = ''; bindingStates.value = Object.fromEntries(config.channels.map(c => [c.id, c.binding_state])); bindingErrors.value = Object.fromEntries(config.channels.map(c => [c.id, c.binding_error || ''])) }
+    if (active) {
+      history.value = records; historyError.value = ''; bindingStates.value = Object.fromEntries(config.channels.map(c => [c.id, c.binding_state])); bindingErrors.value = Object.fromEntries(config.channels.map(c => [c.id, c.binding_error || '']))
+      // A QR task may complete after its dialog is closed or in another tab.
+      // Synchronize saved channels without overwriting an unfinished edit.
+      if (draft.value && config.revision > draft.value.revision && !dirty.value && !busy.value) apply(config)
+    }
   } catch { if (active) historyError.value = '发送记录暂时无法刷新，正在重试。' }
   finally { activityBusy = false }
 }

@@ -55,7 +55,10 @@ async function workspace(browser, width = 1440, role = 'admin') {
       history.unshift({ id: 'delivery-' + ++serial, channel_id: c.id, channel_name: c.name, provider: c.provider, kind: 'test', title: '推送测试', status: failTest ? 'failed' : 'accepted', error: result.error, created_at: new Date().toISOString() })
       return ok({ all_ok: !failTest, results: [result] })
     }
-    if (path === '/api/v1/push/qr/start') { qr = { session_id: 'qr-' + ++serial, provider: body.provider, channel_id: body.channel_id, status: 'waiting', running: true, qr_image: image, qr_url: 'https://q.qq.com/qqbot/openclaw/connect.html?task_id=test-only', message: '请扫码并在官方页面确认', expires_at: new Date(Date.now() + 300000).toISOString() }; return ok(qr) }
+    if (path === '/api/v1/push/qr/start') {
+      if (!qr.running || qr.provider !== body.provider || qr.channel_id !== body.channel_id || qr.revision !== body.revision) qr = { session_id: 'qr-' + ++serial, provider: body.provider, channel_id: body.channel_id, revision: body.revision, status: 'waiting', running: true, qr_image: image, qr_url: 'https://q.qq.com/qqbot/openclaw/connect.html?task_id=test-only', message: '请扫码并在官方页面确认', expires_at: new Date(Date.now() + 300000).toISOString() }
+      return ok(qr)
+    }
     if (path === '/api/v1/push/qr') { if (qr.provider === 'wechat_claw' && qr.status === 'waiting') qr = { ...qr, status: 'need_verifycode', message: '请输入手机显示的数字配对码' }; return ok(qr) }
     if (path === '/api/v1/push/qr/verify') { assert.equal(body.code, '123456'); confirmQR(); return ok({}) }
     if (path === '/api/v1/push/qr/cancel') { if (body.session_id === qr.session_id) qr = { ...qr, running: false, status: 'cancelled' }; return ok({}) }
@@ -69,7 +72,7 @@ async function workspace(browser, width = 1440, role = 'admin') {
     else { await page.getByRole('navigation', { name: '移动导航', exact: true }).getByRole('button', { name: '更多', exact: true }).click(); await page.getByRole('navigation', { name: '更多导航', exact: true }).getByRole('button', { name: new RegExp(name) }).click() }
   }
   async function noOverflow(label) { const d = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: innerWidth })); assert(d.scroll <= d.width + 1, label + ': ' + JSON.stringify(d)) }
-  return { context, page, calls, errors, navigate, noOverflow, confirmQR, fail: () => { failTest = true }, expire: () => { qr = { ...qr, running: false, status: 'expired', message: '二维码已过期，请刷新' } }, settings: () => settings }
+  return { context, page, calls, errors, navigate, noOverflow, confirmQR, fail: () => { failTest = true }, expire: () => { qr = { ...qr, running: false, status: 'expired', message: '二维码已过期，请刷新' } }, settings: () => settings, qr: () => qr }
 }
 
 test('十种推送渠道、QQ/微信扫码、发送结果与独立后台', async ({ browser }, testInfo) => {
@@ -91,7 +94,7 @@ test('十种推送渠道、QQ/微信扫码、发送结果与独立后台', async
     let modal = page.getByRole('dialog')
     await modal.getByAltText('QQ 官方机器人绑定二维码').waitFor()
     await page.screenshot({ path: testInfo.outputPath('qq-binding.png') })
-    w.confirmQR(); await modal.getByRole('heading', { name: '绑定成功' }).waitFor()
+    w.confirmQR(); await modal.getByRole('heading', { name: '机器人凭据已保存' }).waitFor()
     await modal.getByRole('button', { name: '完成', exact: true }).click()
     await page.getByRole('button', { name: '微信扫码绑定' }).click()
     modal = page.getByRole('dialog')
@@ -160,6 +163,53 @@ test('十种推送渠道、QQ/微信扫码、发送结果与独立后台', async
     assert.equal(await page.locator('.activity-row').count(), 1)
     assert(await page.locator('.activity-row').getByText(/增币尚未确认/).isVisible())
     await page.screenshot({ path: testInfo.outputPath('logs-filtered.png'), fullPage: true })
+    assert.deepEqual(w.errors, [])
+  } finally { await w.context.close() }
+})
+
+for (const width of [320, 1440]) test(`QQ ${width}px 关闭、返回、刷新后恢复会话且不重复创建`, async ({ browser }, testInfo) => {
+  const w = await workspace(browser, width, 'user'), { page } = w
+  try {
+    const starts = () => w.calls.filter(c => c.path === '/api/v1/push/qr/start').length
+    const cancels = () => w.calls.filter(c => c.path === '/api/v1/push/qr/cancel').length
+    await page.getByRole('button', { name: 'QQ 扫码绑定' }).click()
+    let modal = page.getByRole('dialog', { name: '扫码连接 QQ 机器人', exact: true })
+    await modal.getByAltText('QQ 官方机器人绑定二维码').waitFor()
+    const original = w.qr().session_id, expiry = w.qr().expires_at
+    await expect(modal.getByText(/关闭弹窗或切换应用不会取消绑定/)).toBeVisible()
+    await w.noOverflow('recoverable QQ dialog')
+    await page.screenshot({ path: testInfo.outputPath('qq-recoverable.png') })
+    await modal.getByRole('button', { name: '关闭弹窗', exact: true }).click()
+    assert.equal(cancels(), 0)
+    assert(w.qr().running)
+    await page.getByRole('button', { name: 'QQ 扫码绑定' }).click()
+    await modal.getByAltText('QQ 官方机器人绑定二维码').waitFor()
+    assert.equal(starts(), 1)
+    await page.goBack()
+    await modal.waitFor({ state: 'hidden' })
+    await page.reload()
+    await page.getByRole('button', { name: 'QQ 扫码绑定' }).click()
+    await modal.getByAltText('QQ 官方机器人绑定二维码').waitFor()
+    assert.equal(starts(), 1)
+    assert.equal(cancels(), 0)
+    assert.equal(w.qr().session_id, original)
+    assert.equal(w.qr().expires_at, expiry)
+    assert.equal(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]).includes('qr-')), false, 'QR credentials reached browser storage')
+    await modal.getByRole('button', { name: '刷新二维码', exact: true }).click()
+    await expect.poll(starts).toBe(2)
+    assert.equal(cancels(), 1)
+    assert.notEqual(w.qr().session_id, original)
+    await modal.getByRole('button', { name: '取消绑定', exact: true }).click()
+    await modal.waitFor({ state: 'hidden' })
+    assert.equal(cancels(), 2)
+    assert.equal(w.qr().running, false)
+    await page.getByRole('button', { name: 'QQ 扫码绑定' }).click()
+    await modal.getByAltText('QQ 官方机器人绑定二维码').waitFor()
+    assert.equal(starts(), 3)
+    await modal.getByRole('button', { name: '关闭弹窗', exact: true }).click()
+    w.confirmQR()
+    await expect(page.locator('.push-channel')).toHaveCount(1)
+    assert.equal(w.settings().enable, false, 'binding enabled automatic notifications')
     assert.deepEqual(w.errors, [])
   } finally { await w.context.close() }
 })

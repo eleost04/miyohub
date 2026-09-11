@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -186,6 +187,64 @@ func TestCancelledBindingCannotPersistLateCredentials(t *testing.T) {
 	m.Stop()
 	if calls, _, _ := sink.snapshot(); calls != 0 {
 		t.Fatal("cancelled binding persisted credentials")
+	}
+}
+
+func TestBindingRestoresSameSessionWithoutExtendingExpiryOrCrossingUsers(t *testing.T) {
+	var creates atomic.Int32
+	m := NewBindings(&bindingSink{}, Sender{HTTP: &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		if strings.HasSuffix(r.URL.Path, "create_bind_task") {
+			creates.Add(1)
+			return response(`{"retcode":0,"data":{"task_id":"fixture-task"}}`), nil
+		}
+		return response(`{"retcode":0,"data":{"status":0}}`), nil
+	})}})
+	m.pollInterval = time.Hour
+	defer m.Stop()
+	first, err := m.Start("owner", "qqbot", "channel", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitBinding(t, m, "owner", "waiting")
+	var wg sync.WaitGroup
+	for range 20 {
+		wg.Go(func() {
+			got, err := m.Start("owner", "qqbot", "channel", 1)
+			if err != nil || got.SessionID != first.SessionID || !got.ExpiresAt.Equal(first.ExpiresAt) || got.Revision != 1 {
+				t.Error("restoring a session restarted it or extended its expiry")
+			}
+		})
+	}
+	wg.Wait()
+	if creates.Load() != 1 {
+		t.Fatal("restoring a session repeated the upstream QR request")
+	}
+	m.Cancel("other-user", first.SessionID)
+	if !m.State("owner").Running || m.State("other-user").SessionID != "" {
+		t.Fatal("another user could read or cancel the session")
+	}
+	updated, err := m.Start("owner", "qqbot", "channel", 2)
+	if err != nil || updated.SessionID == first.SessionID {
+		t.Fatal("changed configuration restored a stale binding")
+	}
+	m.Cancel("owner", first.SessionID)
+	if !m.State("owner").Running {
+		t.Fatal("an old tab cancelled the replacement session")
+	}
+	m.Cancel("owner", updated.SessionID)
+	if got := m.State("owner"); got.Running || got.QRImage != "" || got.QRURL != "" {
+		t.Fatal("explicit cancellation left an active QR")
+	}
+	restarted, err := m.Start("owner", "qqbot", "channel", 2)
+	if err != nil || restarted.SessionID == updated.SessionID {
+		t.Fatal("cancelled session was restored")
+	}
+	m.mu.Lock()
+	m.sessions["owner"].state.ExpiresAt = time.Now().Add(-time.Second)
+	m.mu.Unlock()
+	renewed, err := m.Start("owner", "qqbot", "channel", 2)
+	if err != nil || renewed.SessionID == restarted.SessionID {
+		t.Fatal("expired session was restored")
 	}
 }
 
