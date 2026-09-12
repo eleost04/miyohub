@@ -1,6 +1,6 @@
 # MiyoHub
 
-[Feature board](ROADMAP.md) · [Contributing and maintenance](CONTRIBUTING.md) · [Issues](https://github.com/eleost04/miyohub/issues)
+[Feature board](ROADMAP.md) · [Contributing and maintenance](CONTRIBUTING.md) · [Issues](https://github.com/eleost04/miyohub/issues) · [Security policy](.github/SECURITY.md)
 
 [简体中文](README.md) · Version **0.1.0-beta.1**
 

@@ -2,7 +2,7 @@
 
 [English](README.en.md) · 当前版本：**0.1.0-beta.1**
 
-[功能看板](ROADMAP.md) · [参与开发与维护规范](CONTRIBUTING.md) · [问题反馈](https://github.com/eleost04/miyohub/issues)
+[功能看板](ROADMAP.md) · [参与开发与维护规范](CONTRIBUTING.md) · [问题反馈](https://github.com/eleost04/miyohub/issues) · [安全政策](.github/SECURITY.md)
 
 自部署的米游社签到、米游币任务与商品兑换管理。Go + Vue 3，非米哈游官方产品；上游接口、账号风控和商品库存可能变化，不保证奖励到账或兑换成功。
 
