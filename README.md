@@ -19,6 +19,8 @@
 
 本版本为 Beta：短信、米游币请求、QQ 网关与兑换兼容性已通过隔离回归，真实账号风控和客户端仍需验收，详见看板。`main` 保持稳定基线，测试版从签名标签或 `develop` 获取。
 
+参与开发请克隆 `develop`：`git clone --branch develop https://github.com/eleost04/miyohub.git`。普通克隆默认检出 `main`；已有完整克隆可执行 `git fetch origin develop`，再用 `git switch develop` 切换（没有本地分支时会跟踪 `origin/develop`）。
+
 ## 快速开始
 
 需要 Docker Engine 和 Compose v2。
@@ -37,6 +39,36 @@ curl -fsS http://127.0.0.1:5890/api/v1/health
 容器名为 `miyohub`，数据卷为 `miyohub_miyohub-data`，网络为 `miyohub_default`。根文件系统只读、非 root 运行。不要使用 `docker compose down -v` 更新，它会删除账号数据卷。
 
 另一个可选项目 [miyohub-captcha](https://github.com/eleost04/miyohub-captcha) 提供本机 CPU 验证码服务；不需要自建服务时可只部署主站。
+
+## 环境变量
+
+Compose 从项目目录的 `.env` 读取下列部署变量；复制 `.env.example` 后按需修改，建议 `chmod 600 .env`。只提交示例，不提交实际配置。裸程序**不会自动加载 `.env`**，请通过进程环境或 CLI 参数传入。
+
+| 变量 | 默认值 | 作用 / 注意事项 |
+| --- | --- | --- |
+| `MIYOHUB_BIND_ADDR` | `127.0.0.1` | 仅 Compose：宿主机监听地址；公网反代建议保持回环 |
+| `MIYOHUB_HTTP_PORT` | `5890` | 仅 Compose：宿主机映射端口；不改变容器内部端口 |
+| `MIYOHUB_PUBLIC_ORIGIN` | 空 | 浏览器访问的完整来源，如 `https://miyohub.example.com`；无路径，需与协议 / 主机 / 端口一致 |
+| `MIYOHUB_SECURE_COOKIE` | `false` | HTTPS 部署设为 `true`；启用后 Cookie 仅通过 HTTPS 发送，纯 HTTP 本地访问不要开启 |
+| `MIYOHUB_PUSH_ALLOW_PRIVATE` | `false` | `true` 允许**所有站点用户**的推送渠道访问私网 / 回环；只用于完全可信的部署，不建议多用户公网服务开启 |
+
+布尔值只有小写 `true` 才启用。修改 Compose 环境后用 `docker compose up -d --force-recreate` 重建容器；`docker compose restart` 不会更新环境。
+
+直接运行二进制 / `go run` 另支持以下变量；CLI 同名用途的参数优先：
+
+| 变量 | 裸程序默认值 | 对应 CLI 参数 / 容器行为 |
+| --- | --- | --- |
+| `MIYOHUB_HOST` | `127.0.0.1` | `--host`；镜像内部固定为 `0.0.0.0` |
+| `MIYOHUB_PORT` | `5890` | `--port`；Compose 内部健康检查使用此默认端口 |
+| `MIYOHUB_DATA_DIR` | `data` | `--data-dir`；镜像内部为持久卷 `/data`，必须同时保留状态和密钥 |
+| `MIYOHUB_WEB_DIR` | `web/dist` | `--web-dir`；相对于工作目录，镜像中为 `/app/web/dist` |
+
+```bash
+MIYOHUB_HOST=127.0.0.1 MIYOHUB_PORT=5890 MIYOHUB_DATA_DIR=./data \
+  go run ./cmd/miyohub serve --web-dir ./web/dist
+```
+
+把裸程序专用变量写入 Compose 的 `.env` 并不会自动传进容器，现有 Compose 只传递表中声明的部署变量。账号凭据、签到时间、打码与推送密钥通过网页配置；本项目不支持用 `MIYOHUB_ADMIN_PASSWORD` 或 Cookie 环境变量创建用户。米哈游出站代理在系统设置配置，不读取 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY`。
 
 ## HTTPS 与 Caddy
 

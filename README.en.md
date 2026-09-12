@@ -19,6 +19,8 @@ A site user is the ownership boundary. Administrators cannot browse another user
 
 This is a Beta. Isolated regressions cover SMS, BBS requests, QQ gateways and exchange compatibility; live account risk controls and clients still need acceptance, as recorded on the board. `main` keeps the stable baseline; use a signed pre-release tag or `develop` for this test version.
 
+For development, use `git clone --branch develop https://github.com/eleost04/miyohub.git`. A normal clone checks out `main`. In an existing full clone, run `git fetch origin develop` followed by `git switch develop` (Git tracks `origin/develop` if no local branch exists).
+
 ## Quick start
 
 Requires Docker Engine and Compose v2.
@@ -37,6 +39,36 @@ The default port binds to loopback. Create the administrator locally before publ
 The container is named `miyohub`, the persistent volume is `miyohub_miyohub-data`, and the network is `miyohub_default`. The process is non-root with a read-only root filesystem. **Do not use `docker compose down -v` to upgrade**: it deletes the account-data volume.
 
 The optional [miyohub-captcha](https://github.com/eleost04/miyohub-captcha) companion provides a local CPU solver. The main application can run without it.
+
+## Environment variables
+
+Compose reads the deployment variables below from the project's `.env`. Copy `.env.example`, edit it as needed and use restrictive permissions (`chmod 600 .env`). Commit only the example. The standalone program **does not load `.env` automatically**: use process environment variables or CLI flags.
+
+| Variable | Default | Purpose / caveat |
+| --- | --- | --- |
+| `MIYOHUB_BIND_ADDR` | `127.0.0.1` | Compose only: host bind address; keep loopback behind a host reverse proxy |
+| `MIYOHUB_HTTP_PORT` | `5890` | Compose only: published host port, not the internal container port |
+| `MIYOHUB_PUBLIC_ORIGIN` | empty | Exact browser origin such as `https://miyohub.example.com`, without a path; scheme, host and port must match |
+| `MIYOHUB_SECURE_COOKIE` | `false` | Set to `true` for HTTPS; cookies then require HTTPS, so leave off for plain-HTTP local access |
+| `MIYOHUB_PUSH_ALLOW_PRIVATE` | `false` | `true` allows **every site user's** notification endpoints to reach private / loopback addresses; use only in a fully trusted deployment |
+
+Only lowercase `true` enables boolean variables. After Compose environment changes, recreate with `docker compose up -d --force-recreate`; `docker compose restart` does not update the environment.
+
+The standalone binary / `go run` also supports these variables. Equivalent CLI flags take precedence:
+
+| Variable | Standalone default | CLI flag / container behavior |
+| --- | --- | --- |
+| `MIYOHUB_HOST` | `127.0.0.1` | `--host`; the image sets `0.0.0.0` internally |
+| `MIYOHUB_PORT` | `5890` | `--port`; Compose health checks use this default internal port |
+| `MIYOHUB_DATA_DIR` | `data` | `--data-dir`; the image uses the persistent `/data` volume; retain both state and key |
+| `MIYOHUB_WEB_DIR` | `web/dist` | `--web-dir`; relative to the working directory, `/app/web/dist` in the image |
+
+```bash
+MIYOHUB_HOST=127.0.0.1 MIYOHUB_PORT=5890 MIYOHUB_DATA_DIR=./data \
+  go run ./cmd/miyohub serve --web-dir ./web/dist
+```
+
+Putting standalone-only variables in Compose's `.env` does not inject them into the container; the supplied Compose file passes only its declared deployment variables. Configure credentials, schedules, captcha and notification keys in the web UI. `MIYOHUB_ADMIN_PASSWORD` and Cookie environment-based account creation are not supported. Configure upstream proxies in System settings; miHoYo requests do not use `HTTP_PROXY`, `HTTPS_PROXY` or `ALL_PROXY`.
 
 ## HTTPS and Caddy
 

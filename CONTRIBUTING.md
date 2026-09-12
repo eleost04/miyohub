@@ -2,6 +2,8 @@
 
 本规范适用于 MiyoHub；验证码服务独立发布，但采用相同的提交、审查和安全规则。功能进度以 [ROADMAP.md](ROADMAP.md) 为准，面向用户的改动维护在 `web/src/releases.json`。
 
+开发入口是 `develop`，不是稳定基线 `main`。首次参与可用 `git clone --branch develop https://github.com/eleost04/miyohub.git`；已有完整克隆先 `git fetch origin develop`，再 `git switch develop`，然后从最新开发分支创建自己的短期分支。
+
 ## 一次只交付一个可验证的改动
 
 1. 在看板登记问题、影响范围、目标版本及验收条件。先区分上游限制、环境问题与项目缺陷。
@@ -55,7 +57,7 @@ Risk: Actual permission revocation must still stop further requests.
 
 `0.x` 的不兼容变更至少递增次版本并提供迁移说明；`1.0.0` 之后不兼容变更递增主版本。不是每次提交都改版本号；一个发布周期统一版本。新增功能与修复同时交付时，采用其中最高级别的版本递增。
 
-当前基线为 `0.0.1`。本轮包含代理等新增功能，目标为 `0.1.0-beta.1`；真实短信风控和客户端兼容性验收后再推进正式版。验证码服务只有自身代码或协议变化时才递增版本，不跟随主站机械改号。
+当前稳定基线为 `0.0.1`，已发布测试版为 `0.1.0-beta.1`；本轮任务 / 兑换修复与独立社区执行目标为 `0.1.0-beta.2`。一批改动验证完成后统一迭代版本，真实短信风控和客户端兼容性验收后再推进正式版。验证码服务只有自身代码或协议变化时才递增版本，不跟随主站机械改号。
 
 ## 验证门槛
 
@@ -85,6 +87,6 @@ CI 是验证流水线，不是提交类型或目标分支：用户功能使用 `
 
 ## English maintainer summary
 
-Use focused branches and signed Conventional Commits (`fix`, `feat`, `docs`, etc.) with a body explaining the change and tests. Integrate reviewed work through `develop`; release stable versions from `main`. SemVer patch versions fix bugs, minor versions add features, and `-beta.N` / `-rc.N` mark pre-releases. The current feature cycle targets `0.1.0-beta.1`.
+Clone `develop` for contribution (`git clone --branch develop https://github.com/eleost04/miyohub.git`); a normal clone defaults to the stable `main` baseline. Use focused branches and signed Conventional Commits (`fix`, `feat`, `docs`, etc.) with a body explaining the change and tests. Push each verified change to its topic branch, then integrate through a PR to `develop`; CI is the validation pipeline, not the commit type or target branch. Release stable versions from `main`. SemVer patch versions fix bugs, minor versions add features, and `-beta.N` / `-rc.N` mark pre-releases. Batch validated changes into a version; the current cycle targets `0.1.0-beta.2`.
 
 Keep the roadmap and real commit-linked changelog current. Run isolated Go/browser tests and privacy checks; never use live accounts for automated tests. Verify signed tags before releasing, never rewrite published release tags, and preserve paired state/key backups for rollback. Production data and third-party models are never repository contents.
