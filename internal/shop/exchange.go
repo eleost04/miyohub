@@ -23,6 +23,9 @@ type Service struct {
 	Emit    func(string)
 	// AcquireExchange serializes actual requests, not preparation or retry waits.
 	AcquireExchange func(context.Context) (release func(), err error)
+	// Set only by scheduled execution. Manual execution uses its own start time.
+	clock       *serverClock
+	scheduledAt time.Time
 }
 
 func (s Service) Goods(ctx context.Context, game string) (map[string]any, error) {
@@ -313,7 +316,7 @@ func normalizeGood(raw map[string]any) map[string]any {
 	exchangeAt := 0
 	if soldOut {
 		exchangeAt = nextTime
-	} else if status != "online" && saleStart > now && (nextTime <= 0 || saleStart <= nextTime) {
+	} else if saleStart > now && (nextTime <= 0 || saleStart <= nextTime) {
 		exchangeAt = saleStart
 	} else if status != "online" {
 		exchangeAt = nextTime
@@ -323,6 +326,8 @@ func normalizeGood(raw map[string]any) map[string]any {
 		displayStatus = "sold_out_with_next"
 	} else if soldOut {
 		displayStatus = "ended"
+	} else if exchangeAt > now {
+		displayStatus = "scheduled"
 	} else if unlimit {
 		displayStatus = "always"
 	} else if status == "online" {

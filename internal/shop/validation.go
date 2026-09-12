@@ -11,6 +11,7 @@ import (
 )
 
 var ErrUncertain = errors.New("兑换结果无法确认，请先在米游社查看兑换记录，勿重复兑换")
+var ErrRetryWindowElapsed = errors.New("已到达兑换窗口截止时间，未发送新的兑换请求")
 
 func (s Service) device() model.Device {
 	if s.Account.Device.ID != "" {
@@ -145,7 +146,7 @@ func retryable(result map[string]any) bool {
 		return false
 	}
 	message := strings.ToLower(text(result["message"], ""))
-	for _, word := range []string{"不足", "限购", "上限", "已兑换", "已经兑换", "售罄", "兑完", "库存", "验证", "安全", "登录", "过期", "失效", "cookie", "token", "签名", "地址", "角色", "区服", "参数", "无效", "权限", "禁止", "封禁", "invalid", "insufficient", "sold out", "already", "limit exceeded"} {
+	for _, word := range []string{"不足", "限购", "上限", "已兑换", "已经兑换", "售罄", "兑完", "库存", "已结束", "已下架", "不存在", "验证", "安全", "登录", "过期", "失效", "cookie", "token", "签名", "地址", "角色", "区服", "参数", "无效", "权限", "禁止", "封禁", "invalid", "insufficient", "sold out", "already", "limit exceeded"} {
 		if strings.Contains(message, word) {
 			return false
 		}
@@ -154,7 +155,7 @@ func retryable(result map[string]any) bool {
 	case "兑换失败", "兑换失败。", "兑换失败，请稍后重试", "兑换失败，请稍后再试", "系统错误", "服务器错误", "内部错误", "fail", "failed":
 		return true
 	}
-	for _, word := range []string{"未开始", "尚未开始", "稍后重试", "稍后再试", "繁忙", "排队", "频繁", "too many requests", "busy", "try again", "temporarily"} {
+	for _, word := range []string{"未开始", "尚未开始", "未到兑换时间", "未到开售时间", "未到开放时间", "没到兑换时间", "没到开售时间", "稍后重试", "稍后再试", "繁忙", "排队", "频繁", "too many requests", "busy", "try again", "temporarily"} {
 		if strings.Contains(message, word) {
 			return true
 		}
@@ -173,36 +174,70 @@ func exchangeResultText(result map[string]any) string {
 	return message
 }
 
-const maxExchangeAttempts = 60
+// 120 seconds / 0.2 seconds: a last-resort cap consistent with the full window,
+// not an independent 60-request cutoff that silently truncates longer windows.
+const maxExchangeAttempts = 600
 
 func (s Service) ExchangeWithRetry(ctx context.Context, p model.ExchangePlan, progress func(int, string) error) (map[string]any, error) {
-	window := time.Duration(max(0, min(120, s.Config.Shop.RetrySeconds)) * float64(time.Second))
-	deadline := time.Now().Add(window)
+	clock := s.clock
+	if clock == nil {
+		clock = &serverClock{}
+	}
+	window := s.Config.Shop.RetryWindow()
+	start := clock.Now()
+	if !s.scheduledAt.IsZero() {
+		start = s.scheduledAt
+	}
+	deadline := start.Add(window)
 	interval := time.Duration(max(0.2, min(30, s.Config.Shop.RetryInterval)) * float64(time.Second))
 	var last map[string]any
 	finish := func(reason string) (map[string]any, error) { last["retry_stop"] = reason; return last, nil }
-	for attempt := 1; ; attempt++ {
+	expired := func() bool {
+		if window > 0 {
+			return !clock.Now().Before(deadline)
+		}
+		return !s.scheduledAt.IsZero() && !clock.Now().Before(start.Add(s.Config.Shop.DispatchWindow()))
+	}
+	finishExpired := func() (map[string]any, error) {
+		if last != nil {
+			return finish("已到达重试时限")
+		}
+		return nil, ErrRetryWindowElapsed
+	}
+	for attempt := 0; ; {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if last != nil && !time.Now().Before(deadline) {
-			return finish("已到达重试时限")
+		if expired() {
+			return finishExpired()
+		}
+		if !s.scheduledAt.IsZero() {
+			if err := clock.wait(ctx, s.scheduledAt, func() bool { return true }); err != nil {
+				return nil, err
+			}
+			if expired() {
+				return finishExpired()
+			}
 		}
 		// Only waiting/starting is bounded by the retry window. Do not abort
 		// an in-flight request at its boundary and turn a known result unknown.
-		queueDeadline := deadline
+		queueWait := deadline.Sub(clock.Now())
 		if window == 0 {
-			queueDeadline = time.Now().Add(15 * time.Second)
+			queueWait = 15 * time.Second
 		}
-		queueCtx, queueCancel := context.WithDeadline(ctx, queueDeadline)
+		// The upstream clock is not the host clock used by context deadlines.
+		queueCtx, queueCancel := context.WithTimeout(ctx, queueWait)
 		release := func() {}
 		if s.AcquireExchange != nil {
 			var err error
 			release, err = s.AcquireExchange(queueCtx)
 			if err != nil {
 				queueCancel()
-				if last != nil && ctx.Err() == nil && errors.Is(err, context.DeadlineExceeded) {
-					return finish("已到达重试时限")
+				if window > 0 && ctx.Err() == nil && errors.Is(err, context.DeadlineExceeded) {
+					if !expired() {
+						continue
+					}
+					return finishExpired()
 				}
 				return nil, err
 			}
@@ -212,10 +247,17 @@ func (s Service) ExchangeWithRetry(ctx context.Context, p model.ExchangePlan, pr
 			release()
 			return nil, err
 		}
-		if last != nil && !time.Now().Before(deadline) {
+		if expired() {
 			release()
-			return finish("已到达重试时限")
+			return finishExpired()
 		}
+		if !s.scheduledAt.IsZero() && clock.earliestNow().Before(s.scheduledAt) {
+			// A concurrent clock update may move the estimate backwards while
+			// queued. Release the account gate before waiting again.
+			release()
+			continue
+		}
+		attempt++
 		if progress != nil {
 			if err := progress(attempt, "正在发送兑换请求"); err != nil {
 				release()
@@ -244,9 +286,9 @@ func (s Service) ExchangeWithRetry(ctx context.Context, p model.ExchangePlan, pr
 			return finish("此类拒绝不自动重试，请检查原因")
 		}
 		if attempt >= maxExchangeAttempts {
-			return finish("已达到 60 次请求上限")
+			return finish(fmt.Sprintf("已达到 %d 次请求保护上限", maxExchangeAttempts))
 		}
-		if !time.Now().Before(deadline) {
+		if !clock.Now().Before(deadline) {
 			return finish("已到达重试时限")
 		}
 		delay := interval
@@ -259,7 +301,7 @@ func (s Service) ExchangeWithRetry(ctx context.Context, p model.ExchangePlan, pr
 				return nil, err
 			}
 		}
-		timer := time.NewTimer(min(delay, time.Until(deadline)))
+		timer := time.NewTimer(min(delay, deadline.Sub(clock.Now())))
 		select {
 		case <-ctx.Done():
 			timer.Stop()
