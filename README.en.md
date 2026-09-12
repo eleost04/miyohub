@@ -2,7 +2,7 @@
 
 [Feature board](ROADMAP.md) · [Contributing and maintenance](CONTRIBUTING.md) · [Issues](https://github.com/eleost04/miyohub/issues) · [Security policy](.github/SECURITY.md)
 
-[简体中文](README.md) · Version **0.1.0-beta.1**
+[简体中文](README.md) · Version **0.1.0-beta.2**
 
 Self-hosted MiYouShe check-ins, community coin tasks and merchandise exchange management, built with Go and Vue 3. This is not an official HoYoverse product. Upstream APIs, account challenges and stock can change; task rewards and successful exchanges are not guaranteed.
 
@@ -26,7 +26,7 @@ For development, use `git clone --branch develop https://github.com/eleost04/miy
 Requires Docker Engine and Compose v2.
 
 ```bash
-git clone --branch v0.1.0-beta.1 --depth 1 https://github.com/eleost04/miyohub.git
+git clone --branch v0.1.0-beta.2 --depth 1 https://github.com/eleost04/miyohub.git
 cd miyohub
 cp .env.example .env
 docker compose up -d --build
@@ -155,6 +155,8 @@ Success, insufficient balance, purchase limits, exhausted stock, ended sales, ex
 Every user controls automatic delivery, task/exchange categories, error-only filtering and private channels. Only results belonging to that user's bound accounts are sent. Choose a delivery method to configure it directly in a dialog. Enabling a channel does not enable the master automatic-delivery switch. A manual test sends immediately.
 
 “Accepted by the notification service” means the provider acknowledged the request, not that a device received or read it. Official QQ setup happens on the official QR page. After WeChat binding, send the bot a message to establish a session. Provider permissions, session expiry and quotas still apply.
+
+Check-in notifications retain key counts, rechecked coin gains / balances and necessary errors. In Run logs, select a record to inspect and export the full process. New records are grouped strictly by account and execution ID; older records show explicitly labelled context instead. Only the latest 500 log entries are retained, so previously pruned details cannot be recovered.
 
 The official QQ Connect button waits for an online gateway session. After credentials are bound, MiyoHub authenticates, maintains heartbeats and reconnects with bounded backoff. Channel settings and logs report connecting, online and retry reasons. Connectivity is independent of notification switches: deleting the channel, clearing ClientSecret or disabling its owner disconnects the bot. Chat content is neither stored nor answered, and incoming messages never change the configured recipient. The server needs outbound official QQ HTTPS/WSS access. If MiyoHub reports online but the official page still cannot finish, check the QQ client, network and bot permissions; this alone does not establish a HarmonyOS issue.
 

@@ -1,6 +1,6 @@
 # MiyoHub
 
-[English](README.en.md) · 当前版本：**0.1.0-beta.1**
+[English](README.en.md) · 当前版本：**0.1.0-beta.2**
 
 [功能看板](ROADMAP.md) · [参与开发与维护规范](CONTRIBUTING.md) · [问题反馈](https://github.com/eleost04/miyohub/issues) · [安全政策](.github/SECURITY.md)
 
@@ -26,7 +26,7 @@
 需要 Docker Engine 和 Compose v2。
 
 ```bash
-git clone --branch v0.1.0-beta.1 --depth 1 https://github.com/eleost04/miyohub.git
+git clone --branch v0.1.0-beta.2 --depth 1 https://github.com/eleost04/miyohub.git
 cd miyohub
 cp .env.example .env
 docker compose up -d --build
@@ -155,6 +155,8 @@ miyohub.example.com {
 各用户独立配置自动推送、签到 / 兑换范围和仅异常通知，只发送其绑定账号的结果。点击接收方式即可在弹窗配置，无需再找“添加渠道”。启用某个渠道不等于启用自动推送总开关；手动测试会立即发送消息。
 
 “推送服务已接收”仅表示服务端受理成功，不承诺终端送达或阅读。QQ 官方扫码在官方页面创建 / 选择机器人；微信扫码后须先发送一条消息建立会话。官方权限、消息时效与额度仍然适用。
+
+签到推送只保留关键统计、复查确认的米游币增量 / 余额及必要异常。完整过程在「运行日志」点击任意记录展开并可导出；新日志严格按账号与执行编号关联，旧日志仅提供明确标注的上下文。日志仍保留最近 500 条，已清理的早期内容无法恢复。
 
 QQ 官方页的“连接”要等机器人网关上线才会完成。MiyoHub 在绑定凭据后建立鉴权与心跳连接，断开后有限退避重连；在渠道配置及运行日志查看“正在连接 / 已上线 / 正在重试”及原因。连接独立于通知开关：关闭自动推送不会使机器人离线，删除渠道、清除 ClientSecret 或停用用户才会断开。不会回复或保存聊天，也不会根据来信更换接收者。服务器需能访问 QQ 官方 HTTPS / WSS；若本站显示已上线而官方页仍不能完成，再检查 QQ 客户端版本、网络与机器人权限，不能仅据此认定是鸿蒙问题。
 
