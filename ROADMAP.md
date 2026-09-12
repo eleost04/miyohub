@@ -39,7 +39,7 @@
 | QQ、微信及其他推送渠道 | 已实现，外部渠道待验收 | `internal/notify/`、`web/src/components/PushPanel.vue` | 收件人、渠道额度和有效期遵守官方限制 |
 | 移动端弹窗、自动保存、SVG | 已实现 | `web/src/components/`、`web/tests/` | 持续限制首屏资源；密钥不写入浏览器缓存 |
 | 游戏实时便笺、活动日历 | 规划 | 尚无 MiyoHub 实现 | MiyoSign 有参考实现；不与当前签到状态混为一谈 |
-| 自动上传容器镜像 | 尚未启用 | 构建配置与发布工作流 | 需明确分发范围，且先核实第三方许可 |
+| 主站私有开发镜像自动发布 | 已实现，首次远端构建待验证 | `.github/workflows/ci.yml`、`scripts/image-policy.mjs` | develop 完整 CI 通过后发布 develop / SHA 标签；检查私有可见性与签名，PR 不发布；打码镜像 / 模型不包含在内 |
 
 参考代码：[MiyoQian](https://github.com/ytf211/MiyoQian)、[MiyoSign](https://github.com/ytf211/miyosign)、[MihoyoBBSTools](https://github.com/Womsxd/MihoyoBBSTools)。接口随上游变化；仅借鉴可验证的行为，不以参考项目能运行替代本项目验收。
 

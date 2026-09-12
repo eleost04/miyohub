@@ -46,6 +46,7 @@ Compose reads the deployment variables below from the project's `.env`. Copy `.e
 
 | Variable | Default | Purpose / caveat |
 | --- | --- | --- |
+| `MIYOHUB_IMAGE` | `miyohub:local` | Compose only: local or authenticated registry image; use `ghcr.io/eleost04/miyohub:develop` to follow development builds |
 | `MIYOHUB_BIND_ADDR` | `127.0.0.1` | Compose only: host bind address; keep loopback behind a host reverse proxy |
 | `MIYOHUB_HTTP_PORT` | `5890` | Compose only: published host port, not the internal container port |
 | `MIYOHUB_PUBLIC_ORIGIN` | empty | Exact browser origin such as `https://miyohub.example.com`, without a path; scheme, host and port must match |
@@ -174,7 +175,28 @@ Reference footprint from a Linux/amd64 build on 2026-09-11. Image sizes are unco
 
 For both services, allow at least 2 CPUs, 2 GiB RAM and over 3 GiB free disk. Local builds should have 4 GiB RAM and at least 5 GiB free disk, excluding growing caches/backups/logs. Idle measurements are not peak-capacity guarantees. The solver uses one worker; increasing workers is not supported.
 
-Releases currently provide source and Linux archives, **not automatically published Docker images**. Any image distribution should use explicit version and rollback tags. Check usage and redistribution rights separately for the solver's third-party runtime code and model weights.
+Signed releases provide source and Linux archives. An opt-in private development-image pipeline is available for the main app. Companion solver images and model weights are not uploaded with it; verify their third-party redistribution rights separately.
+
+## Tracking development images
+
+Maintainers can set the Actions variable `MIYOHUB_PUBLISH_DEV_IMAGE=true`. After code CI passes on `develop`, it publishes Linux amd64 / arm64 images:
+
+- `ghcr.io/eleost04/miyohub:develop`: the latest successfully validated and published development build.
+- `ghcr.io/eleost04/miyohub:sha-<full commit SHA>`: a source-revision traceability / rollback tag.
+- For a strict content pin, use `ghcr.io/eleost04/miyohub@sha256:<digest>` from the Actions summary. Tags themselves are not immutable storage.
+
+PRs and failed verification never publish. Documentation-only changes skip image builds; a manual `Build and test` run on `develop` can rebuild. Publication requires a private repository, a verified signed source commit and a private existing package. Permission or policy failures stop publication without changing visibility. Only the publishing job receives `packages: write`, using the built-in `GITHUB_TOKEN`; account secrets and custom PATs are not required. Forks must explicitly opt in; this policy does not publish public packages.
+
+For private pulls, run `docker login ghcr.io -u YOUR_GITHUB_USERNAME` in a trusted terminal and enter a `read:packages` credential at the password prompt (not your GitHub password). Do not put it in commands, README or the project `.env`. Set `.env`'s `MIYOHUB_IMAGE` to the development image, then:
+
+```bash
+docker compose pull miyohub
+# Avoid active tasks / imminent exchanges and back up state plus key first:
+docker compose up -d --no-build miyohub
+docker compose ps
+```
+
+Automatic image publishing does not automatically replace running containers. No unattended updater is installed: an upgrade can interrupt an exchange. Prefer testing Beta builds and pinning a digest in production. Roll back by selecting a retained SHA tag / digest and recreating without deleting the current data volume; do not overwrite new user data with an old state backup. Review version-specific Compose, environment and data-format migration notes. Built arm64 images are not a claim of hardware acceptance.
 
 ## Upgrade, backup and logs
 

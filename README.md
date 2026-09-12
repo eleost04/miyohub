@@ -46,6 +46,7 @@ Compose 从项目目录的 `.env` 读取下列部署变量；复制 `.env.exampl
 
 | 变量 | 默认值 | 作用 / 注意事项 |
 | --- | --- | --- |
+| `MIYOHUB_IMAGE` | `miyohub:local` | 仅 Compose：本地镜像或已登录仓库中的镜像；跟随开发版可设 `ghcr.io/eleost04/miyohub:develop` |
 | `MIYOHUB_BIND_ADDR` | `127.0.0.1` | 仅 Compose：宿主机监听地址；公网反代建议保持回环 |
 | `MIYOHUB_HTTP_PORT` | `5890` | 仅 Compose：宿主机映射端口；不改变容器内部端口 |
 | `MIYOHUB_PUBLIC_ORIGIN` | 空 | 浏览器访问的完整来源，如 `https://miyohub.example.com`；无路径，需与协议 / 主机 / 端口一致 |
@@ -58,7 +59,7 @@ Compose 从项目目录的 `.env` 读取下列部署变量；复制 `.env.exampl
 
 | 变量 | 裸程序默认值 | 对应 CLI 参数 / 容器行为 |
 | --- | --- | --- |
-| `MIYOHUB_HOST` | `127.0.0.1` | `--host`；镜像内部固定为 `0.0.0.0` |
+| `MIYOHUB_HOST` | `127.0.0.1` | `--host`；镜像内部默认 `0.0.0.0` |
 | `MIYOHUB_PORT` | `5890` | `--port`；Compose 内部健康检查使用此默认端口 |
 | `MIYOHUB_DATA_DIR` | `data` | `--data-dir`；镜像内部为持久卷 `/data`，必须同时保留状态和密钥 |
 | `MIYOHUB_WEB_DIR` | `web/dist` | `--web-dir`；相对于工作目录，镜像中为 `/app/web/dist` |
@@ -174,7 +175,28 @@ QQ / 微信扫码任务在服务端保持 5 分钟。关闭弹窗、切换应用
 
 两者同机建议至少 2 核 / 2 GiB，可用磁盘预留 3 GiB 以上；本机构建建议 4 GiB RAM 和 5 GiB 以上可用磁盘，构建缓存、备份及日志另计。空闲样本不是容量上限，高并发与复杂验证需要更多余量。打码服务固定单 worker，不能简单增加 worker 数。
 
-当前发布流程提供源码与 Linux 安装包，**不自动上传 Docker 镜像**。镜像分发应使用明确版本标签并保留回滚版本；打码镜像的第三方运行代码及模型需另外核实使用和再分发许可。
+源码与 Linux 安装包通过签名 Release 发布。主站另提供可启用的私有开发镜像流水线，详见下节；打码镜像与模型不随主站上传，第三方运行代码及模型的再分发许可需另外核实。
+
+## 跟随开发版镜像
+
+仓库维护者在 Actions Variables 设置 `MIYOHUB_PUBLISH_DEV_IMAGE=true` 后，`develop` 的代码 CI 通过才自动构建并推送 Linux amd64 / arm64 镜像：
+
+- `ghcr.io/eleost04/miyohub:develop`：最近通过验证并发布的开发镜像。
+- `ghcr.io/eleost04/miyohub:sha-<完整提交 SHA>`：对应源码提交的追溯 / 回退标签。
+- 需要严格固定镜像内容时使用 `ghcr.io/eleost04/miyohub@sha256:<digest>`；digest 在 Actions 摘要中显示，标签本身不是不可变存储。
+
+PR 和未通过检查的代码不会发布；纯文档变更不重建镜像，必要时可手动运行 `Build and test` 并选择 `develop`。发布检查仓库与已有镜像包均为私有、提交签名已验证；权限或检查失败即停止，不改变包的可见性。使用工作流自带的 `GITHUB_TOKEN`，仅镜像发布作业拥有 `packages: write`，不需要上传账号凭据或 PAT。fork / 其他仓库需自行选择是否启用；当前策略不会发布公开包。
+
+主机拉取私有镜像需要 GitHub Packages 读取权限；在受信终端运行 `docker login ghcr.io -u YOUR_GITHUB_USERNAME`，在密码提示中输入具备 `read:packages` 权限的凭据（不是 GitHub 登录密码），不要放进命令、README 或项目 `.env`。然后把 `.env` 的 `MIYOHUB_IMAGE` 改为开发镜像地址：
+
+```bash
+docker compose pull miyohub
+# 确认没有运行中任务 / 临近兑换，备份状态与密钥后执行：
+docker compose up -d --no-build miyohub
+docker compose ps
+```
+
+镜像自动发布不等于运行中的容器自动升级。默认不安装无人值守更新器，避免更新中断兑换；生产建议先验收 Beta，再锁定 digest。回退时修改 `MIYOHUB_IMAGE` 为保留的 SHA 标签 / digest，再拉取并重建，保留当前数据卷；不把旧状态备份直接覆盖新用户数据。Compose 文件、环境变量及数据格式仍应按对应版本的升级说明核对。arm64 镜像会构建，但不等于完成实机验收。
 
 ## 更新、备份与日志
 
