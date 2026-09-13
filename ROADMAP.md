@@ -1,6 +1,6 @@
 # 功能与兼容性看板
 
-稳定基线：`0.0.1`。已发布安装包为 `0.1.0-beta.1`；`beta.2` 的签名标签和开发镜像已保留，但 Release 被隔离代理测试的竞态检查拦截。本轮修复目标为 `0.1.0-beta.3`，不移动或覆盖旧标签。实际发布状态见 [GitHub Releases](https://github.com/eleost04/miyohub/releases)，更新方式与提交规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+稳定基线：`0.0.1`。已发布测试版：`0.1.0-beta.3`，主站已安全升级。`beta.2` 的签名标签和开发镜像保留，其安装包发布曾被隔离代理测试的竞态检查拦截，修复后使用新标签完成验证，没有移动或覆盖旧标签。实际发布状态见 [GitHub Releases](https://github.com/eleost04/miyohub/releases)，更新方式与提交规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 本看板跟踪 `develop` 与 Beta 的实现和验收，不表示 `main` 的稳定代码已经包含全部测试版功能。只记录脱敏结论，不收集账号、游戏 UID、余额、验证码或机器人凭据。
 
@@ -23,9 +23,9 @@
 | LOG-01 | fix | 汇总行无法查看完整过程、异常筛选误报 | 已部署，隔离回归通过 | 新日志按账号和执行编号关联；旧日志明确显示上下文；320px / 桌面可查看和导出明细，实时刷新后返回保持焦点；失败 0 不算异常，不改变用户隔离 |
 | DOC-01 | docs | 面向项目读者的双语说明与维护规则 | 已实现 | README、功能看板、版本/分支/提交/发布规则可直接使用 |
 | CI-01 | ci | 停止 GitHub 账号任务、保留精简代码验证 | 已实现 | 签到工作流远端已停用并从源码移除；主干 / PR 自动 CI，纯文档保留安全检查；发布步骤最小权限，Action 固定 SHA |
-| CI-02 | test | CONNECT 代理测试夹具的等待时序 | 已修复，本地压力回归通过，目标 beta.3 | beta.2 Release 暴露 WaitGroup 注册与等待缺少 Go 同步关系；旧代码本地复现，修复后单例 100 次竞态与全代理包 20 轮通过；只改隔离测试，不改变代理、鉴权或任务业务 |
+| CI-02 | test | CONNECT 代理测试夹具的等待时序 | 已修复，beta.3 发布验证通过 | beta.2 Release 暴露 WaitGroup 注册与等待缺少 Go 同步关系；旧代码本地复现，修复后单例 100 次竞态与全代理包 20 轮通过；只改隔离测试，不改变代理、鉴权或任务业务 |
 | DOC-02 | docs | 环境变量、Issue 表单与安全政策 | 已实现 | 中英部署变量与开发入口；脱敏提示、私密上报可用性说明；许可证依维护者决定暂不新增 |
-| IMAGE-01 | build | develop 私有镜像跟随 CI | 首次远端双架构发布及私有回读已通过 | CI、签名和私有范围通过才发布 develop / SHA 镜像；已记录多架构 digest，本地健康检查通过；不自动换版生产容器，不等同于 arm64 真机验收 |
+| IMAGE-01 | build | develop 私有镜像跟随 CI | beta.3 双架构发布及私有回读已通过 | CI、签名和私有范围通过才发布 develop / SHA 镜像；已记录多架构 digest，本地健康检查通过；不自动换版生产容器，不等同于 arm64 真机验收 |
 
 ## 已有功能与参考项目差异
 
@@ -43,7 +43,7 @@
 | QQ、微信及其他推送渠道 | 已实现，外部渠道待验收 | `internal/notify/`、`web/src/components/PushPanel.vue` | 收件人、渠道额度和有效期遵守官方限制 |
 | 移动端弹窗、自动保存、SVG | 已实现 | `web/src/components/`、`web/tests/` | 持续限制首屏资源；密钥不写入浏览器缓存 |
 | 游戏实时便笺、活动日历 | 规划 | 尚无 MiyoHub 实现 | MiyoSign 有参考实现；不与当前签到状态混为一谈 |
-| 主站私有开发镜像自动发布 | 首轮远端构建 / 发布 / 私有校验已通过 | `.github/workflows/ci.yml`、`scripts/image-policy.mjs` | develop 完整 CI 通过后发布 develop / SHA 标签；检查私有可见性与签名，PR 不发布；打码镜像 / 模型不包含在内 |
+| 主站私有开发镜像自动发布 | beta.3 构建 / 发布 / 私有校验已通过 | `.github/workflows/ci.yml`、`scripts/image-policy.mjs` | develop 完整 CI 通过后发布 develop / SHA 标签；检查私有可见性与签名，PR 不发布；打码镜像 / 模型不包含在内 |
 
 参考代码：[MiyoQian](https://github.com/ytf211/MiyoQian)、[MiyoSign](https://github.com/ytf211/miyosign)、[MihoyoBBSTools](https://github.com/Womsxd/MihoyoBBSTools)。接口随上游变化；仅借鉴可验证的行为，不以参考项目能运行替代本项目验收。
 
@@ -54,6 +54,8 @@
 ## Beta 的真实环境验收
 
 2026-09-13 发布验证：主站 beta.2 的开发镜像在 [CI 34727237905](https://github.com/eleost04/miyohub/actions/runs/34727237905) 完成 amd64 / arm64 发布及私有回读。本机构建升级后健康检查、前端内容校验通过，只读对比确认原账号归属和预约保留；未发起真实账号测试。随后 [Release 34727792073](https://github.com/eleost04/miyohub/actions/runs/34727792073) 检出代理测试夹具的同步竞态；已本地复现并修复，使用 beta.3 重新验证发布，保留 beta.2 标签与失败记录。
+
+2026-09-13 收尾：[beta.3 Release](https://github.com/eleost04/miyohub/releases/tag/v0.1.0-beta.3) 与 [开发镜像 CI](https://github.com/eleost04/miyohub/actions/runs/34729321609) 均通过完整验证。下载的两个 Linux 包与校验和一致，ELF 架构分别为 amd64 / arm64，包含前端与第三方声明。部署在原自动任务结束后进行，成对备份状态和密钥，保留旧镜像；公网健康、前端内容和账号 / 预约一致性检查通过，验证码服务未参与本次升级。观察到的自然调度为无失败、均跳过，不将它算作新的签到或增币成功验收。
 
 2026-09-12 更新：账号所有者反馈原神、星穹铁道、绝区零签到成功，社区签到后的米游币复查确认新增且剩余可得为 0；部署观察确认 QQ 网关上线。以下未覆盖场景继续保留待验收状态，不公开个人记录。
 
@@ -67,4 +69,4 @@
 
 ## English summary
 
-This board tracks `develop` / Beta rather than claiming that stable `main` contains every change. The current release follow-up targets `0.1.0-beta.3`: beta.2 added concise task notifications, inspectable logs, independent community actions and exchange-window fixes, and its private dual-architecture image was published. Its archive release was stopped by a reproduced test-fixture race; the fixture is fixed without changing proxy runtime behavior, and the old signed tag remains intact. Owner feedback confirms one successful run for Genshin Impact, Honkai: Star Rail and Zenless Zone Zero, plus verified community coin gain; QQ gateway connectivity has been observed. This does not validate every upstream challenge, interaction mission, exchange or mobile client. Missing read/like/share missions are skipped by default, not classified as permanently unsupported; the account owner may explicitly enable bounded independent execution. Game notes/calendars remain planned.
+This board tracks `develop` / Beta rather than claiming that stable `main` contains every change. Version `0.1.0-beta.3` is published and deployed after complete CI, archive checksum / architecture checks, private image verification and a safe data-preserving rollout. It includes beta.2's concise task notifications, inspectable logs, independent community actions and exchange-window fixes. The beta.2 archive release was stopped by a reproduced test-fixture race; the corrected fixture was released under a new signed tag without changing proxy runtime behavior or moving the old tag. Owner feedback confirms one successful run for Genshin Impact, Honkai: Star Rail and Zenless Zone Zero, plus verified community coin gain; QQ gateway connectivity has been observed. The latest observed scheduled run reported only skipped outcomes, with no failures, and is not counted as new check-in or reward acceptance. This does not validate every upstream challenge, interaction mission, exchange or mobile client. Missing read/like/share missions are skipped by default, not classified as permanently unsupported; the account owner may explicitly enable bounded independent execution. Game notes/calendars remain planned.

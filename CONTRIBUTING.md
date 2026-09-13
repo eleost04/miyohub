@@ -57,7 +57,7 @@ Risk: Actual permission revocation must still stop further requests.
 
 `0.x` 的不兼容变更至少递增次版本并提供迁移说明；`1.0.0` 之后不兼容变更递增主版本。不是每次提交都改版本号；一个发布周期统一版本。新增功能与修复同时交付时，采用其中最高级别的版本递增。
 
-当前稳定基线为 `0.0.1`，本轮收尾目标为 `0.1.0-beta.3`。`beta.2` 标签与镜像保留，因 Release 暴露隔离代理测试的竞态，修复后使用新版本重新验证；不覆盖旧标签，也不将测试夹具修复表述为代理业务修复。实际安装包状态以 GitHub Releases 为准。真实短信风控和客户端兼容性验收后再推进正式版。验证码服务只有自身代码或协议变化时才递增版本，不跟随主站机械改号。
+当前稳定基线为 `0.0.1`，已发布测试版为 `0.1.0-beta.3`。`beta.2` 标签与镜像保留，因 Release 暴露隔离代理测试的竞态，修复已通过新版本的完整验证；不覆盖旧标签，也不将测试夹具修复表述为代理业务修复。实际安装包状态以 GitHub Releases 为准。真实短信风控和客户端兼容性验收后再推进正式版。验证码服务只有自身代码或协议变化时才递增版本，不跟随主站机械改号。
 
 ## 验证门槛
 
@@ -89,6 +89,6 @@ CI 是验证流水线，不是提交类型或目标分支：用户功能使用 `
 
 ## English maintainer summary
 
-Clone `develop` for contribution (`git clone --branch develop https://github.com/eleost04/miyohub.git`); a normal clone defaults to the stable `main` baseline. Use focused branches and signed Conventional Commits (`fix`, `feat`, `docs`, etc.) with a body explaining the change and tests. Push each verified change to its topic branch, then integrate through a PR to `develop`; CI is the validation pipeline, not the commit type or target branch. Release stable versions from `main`. SemVer patch versions fix bugs, minor versions add features, and `-beta.N` / `-rc.N` mark pre-releases. Batch validated changes into a version; the current cycle targets `0.1.0-beta.3`. Keep the beta.2 tag after its release-gate failure; fix the test fixture under a new signed tag, never hide a race by retrying until green.
+Clone `develop` for contribution (`git clone --branch develop https://github.com/eleost04/miyohub.git`); a normal clone defaults to the stable `main` baseline. Use focused branches and signed Conventional Commits (`fix`, `feat`, `docs`, etc.) with a body explaining the change and tests. Push each verified change to its topic branch, then integrate through a PR to `develop`; CI is the validation pipeline, not the commit type or target branch. Release stable versions from `main`. SemVer patch versions fix bugs, minor versions add features, and `-beta.N` / `-rc.N` mark pre-releases. Batch validated changes into a version; the latest published prerelease is `0.1.0-beta.3`. The beta.2 tag was retained after its release-gate failure, and the fixture fix passed verification under a new signed tag; never hide a race by retrying until green.
 
 Keep the roadmap and real commit-linked changelog current. Run isolated Go/browser tests and privacy checks; never use live accounts for automated tests. Verify signed tags before releasing, never rewrite published release tags, and preserve paired state/key backups for rollback. Production data and third-party models are never repository contents.
