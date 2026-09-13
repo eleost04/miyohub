@@ -153,7 +153,7 @@ miyohub.example.com {
 
 两者同机建议至少 2 核 / 2 GiB，可用磁盘预留 3 GiB 以上；本机构建建议 4 GiB RAM 和 5 GiB 以上可用磁盘，构建缓存、备份及日志另计。空闲样本不是容量上限，高并发与复杂验证需要更多余量。打码服务固定单 worker，不能简单增加 worker 数。
 
-稳定标签发布流程提供源码与 Linux 安装包。`develop` 另有通过完整 CI 与签名校验后发布私有开发镜像的流程，配置及状态见 [开发版镜像说明](https://github.com/eleost04/miyohub/blob/develop/README.md#开发镜像自动更新)。镜像发布不自动重启生产容器；使用开发镜像时一并检查目标版本的 Compose / 环境配置。打码镜像和模型不随主站上传，需另外核实第三方许可。
+稳定标签发布流程提供源码与 Linux 安装包。`develop` 另有通过完整 CI 与签名校验后发布私有开发镜像的流程，配置及状态见 [开发版镜像说明](https://github.com/eleost04/miyohub/blob/develop/README.md#跟随开发版镜像)。镜像发布不自动重启生产容器；使用开发镜像时一并检查目标版本的 Compose / 环境配置。打码镜像和模型不随主站上传，需另外核实第三方许可。
 
 ## 更新、备份与日志
 
