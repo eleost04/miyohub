@@ -114,6 +114,12 @@ Group labels are local to each site user; an empty label removes membership. Mis
 
 Import shows a five-minute preview before explicit confirmation. Existing UIDs or duplicate names are skipped, never overwritten. New accounts are disabled with automatic tasks turned off until reviewed. Site permissions, sessions, logs, solver/push secrets and redemption plans are excluded. Export does not stop the original deployment: disable its corresponding tasks before switching to avoid duplicate work. This is file migration, not ongoing synchronization; it is not included in the published `0.1.0-beta.3`.
 
+## Development preview: game notes
+
+**Game notes** (under **More** on mobile) reads official stamina, daily progress and expedition data for Genshin Impact, Honkai: Star Rail and Zenless Zone Zero on demand. It does not perform in-game actions. Choose one of your accounts and games, then select a role verified against that account's upstream role list. Integer numbers and numeric strings are normalized; missing numbers and boolean states remain unknown rather than zero or complete. Recovery times are estimates based on the snapshot time.
+
+Notes are cached for 3 minutes and roles for 15 minutes. Requests for an account are serialized with a minimum 3-second gap. Opening a page, global status polling and hidden tabs never poll upstream notes. Verification responses pause that account's record queries for 6 hours in the current process, including after game or credential changes; rate limits respect `Retry-After`. Stale snapshots are labeled explicitly. Queries reuse the configured outbound proxy and existing device identity, without automatic device registration, credential renewal or CAPTCHA solving. Enable records/notes and complete verification in the official client. These safeguards reduce request pressure, but cannot guarantee freedom from upstream restrictions. This feature is not included in published `0.1.0-beta.3`.
+
 ## 🤝 Contributing
 
 
