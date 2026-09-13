@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全问题 / Security concern
+    url: https://github.com/eleost04/miyohub/blob/main/.github/SECURITY.md
+    about: 按安全政策私下报告；不要在普通 Issue 中提供漏洞利用细节或凭据。
+  - name: 功能与兼容性看板 / Roadmap
+    url: https://github.com/eleost04/miyohub/blob/develop/ROADMAP.md
+    about: 查看已实现、待对齐和待真实环境验收的能力。
