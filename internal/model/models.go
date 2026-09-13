@@ -99,14 +99,15 @@ type CloudGamesConfig struct {
 }
 
 type BBSConfig struct {
-	Forums       []int `json:"forums"`
-	Checkin      bool  `json:"checkin"`
-	Read         bool  `json:"read"`
-	Like         bool  `json:"like"`
-	Share        bool  `json:"share"`
-	CancelLike   bool  `json:"cancel_like"`
-	PostLimit    int   `json:"post_limit"`
-	DelaySeconds []int `json:"delay_seconds"`
+	RunAllSelected bool  `json:"run_all_selected"`
+	Forums         []int `json:"forums"`
+	Checkin        bool  `json:"checkin"`
+	Read           bool  `json:"read"`
+	Like           bool  `json:"like"`
+	Share          bool  `json:"share"`
+	CancelLike     bool  `json:"cancel_like"`
+	PostLimit      int   `json:"post_limit"`
+	DelaySeconds   []int `json:"delay_seconds"`
 }
 
 type NetworkConfig struct {
@@ -334,6 +335,8 @@ type LogEntry struct {
 	Component string    `json:"component"`
 	Message   string    `json:"message"`
 	UserID    string    `json:"user_id,omitempty"`
+	AccountID string    `json:"account_id,omitempty"`
+	RunID     string    `json:"run_id,omitempty"`
 }
 
 type AuthStatus struct {

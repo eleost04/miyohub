@@ -37,6 +37,14 @@ func (c *serverClock) Now() time.Time {
 	return time.Now().Add(time.Duration(c.status.OffsetMillis) * time.Millisecond)
 }
 
+// Upstream timestamps have second resolution. A midpoint estimate can be
+// ahead of the actual clock; use its lower bound when waiting for a sale.
+func (c *serverClock) earliestNow() time.Time {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return time.Now().Add(time.Duration(c.status.OffsetMillis-max(0, c.status.UncertaintyMillis)) * time.Millisecond)
+}
+
 func (c *serverClock) sync(ctx context.Context, client *mihoyo.Client, goodsID ...string) error {
 	c.mu.Lock()
 	if pending := c.inflight; pending != nil {
@@ -139,7 +147,7 @@ func (c *serverClock) wait(ctx context.Context, target time.Time, allowed func()
 		if !allowed() {
 			return errors.New("账号或兑换功能已停用")
 		}
-		remaining := target.Sub(c.Now())
+		remaining := target.Sub(c.earliestNow())
 		if remaining <= 0 {
 			return nil
 		}

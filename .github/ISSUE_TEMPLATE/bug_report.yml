@@ -1,0 +1,56 @@
+name: 问题反馈 / Bug report
+description: 报告可复现的问题；请先移除账号凭据和个人信息。
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请勿粘贴 Cookie、SToken、Token、密码、Webhook、代理凭据、二维码、绑定链接、完整手机号 / UID、收货地址或状态 / 密钥文件。
+        即使仓库目前私有，也请先脱敏。疑似权限绕过、凭据泄露等安全问题请按 SECURITY.md 私下上报，不要在这里描述攻击细节。
+        Remove credentials and personal data before posting. Follow SECURITY.md for suspected vulnerabilities.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 隐私检查 / Privacy check
+      options:
+        - label: 我已脱敏文字与图片，未附加账号状态、密钥、二维码或带凭据的链接。
+          required: true
+        - label: 我已检查现有 Issue 和功能看板；这不是需要私下上报的安全漏洞。
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本 / Version
+      description: 填写站内版本、镜像标签或提交 SHA；不要填镜像仓库密码。
+      placeholder: 0.1.0-beta.N / sha-...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境 / Environment
+      description: 系统、CPU 架构、Docker / 二进制、浏览器 / 手机系统、是否反代或代理；无需写公网 IP、域名或凭据。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      placeholder: |
+        1. 打开哪个页面
+        2. 使用哪些选项（不含凭据）
+        3. 出现什么结果
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期与实际 / Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 脱敏日志 / Redacted logs
+      description: 可展开站内日志明细，只贴与问题有关的片段和发生时间 / 时区。请再次检查，不要上传 state.json、.key、.env 或完整备份。
+      render: text

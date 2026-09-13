@@ -20,6 +20,8 @@ func TestRetryClassification(t *testing.T) {
 	}{
 		{-1, "兑换失败", true}, {-1, "服务繁忙，请稍后重试", true}, {-1, "请求过于频繁，请稍后再试", true},
 		{-1, "兑换未开始", true}, {-1, "米游币不足，请稍后重试", false}, {-1, "需要安全验证，请稍后再试", false},
+		{-1, "未到兑换时间", true}, {-1, "尚未到兑换时间", true}, {-1, "还没到兑换时间", true},
+		{-1, "未到开售时间", true}, {-1, "兑换已结束，请稍后重试", false}, {-1, "商品已下架", false},
 		{-1, "库存不足", false}, {-1, "已达到限购上限", false}, {-100, "兑换失败", false},
 		{0, "兑换失败", false}, {-999999, "兑换失败", false}, {-3000, "unknown refusal", false},
 	} {
@@ -87,7 +89,7 @@ func TestCancelledQueueDoesNotCountOrSendARequest(t *testing.T) {
 	})
 	service := Service{Client: client, Config: model.Config{Shop: model.ShopConfig{RetrySeconds: .01}}, AcquireExchange: func(ctx context.Context) (func(), error) { <-ctx.Done(); return nil, ctx.Err() }}
 	_, err := service.ExchangeWithRetry(t.Context(), model.ExchangePlan{GoodsID: "g", DeviceFP: "fp"}, func(int, string) error { t.Error("queued request counted as sent"); return nil })
-	if !errors.Is(err, context.DeadlineExceeded) {
+	if !errors.Is(err, ErrRetryWindowElapsed) {
 		t.Fatal(err)
 	}
 }

@@ -24,33 +24,37 @@ type Event struct {
 }
 
 func TaskEvent(cfg model.Config, account model.Account, results map[string]model.TaskSummary, cancelled bool, at time.Time, stopReason ...string) Event {
-	passed, failed, skipped := 0, 0, 0
-	var details []string
+	passed, failed := 0, 0
+	var details, issues []string
+	omittedIssues := false
 	balanceWarning := false
-	for _, family := range []struct{ key, label string }{{"games", "游戏签到"}, {"cloud", "云游戏签到"}, {"bbs", "米游币任务"}} {
+	for _, family := range []struct{ key, label string }{{"games", "游戏签到"}, {"cloud", "云游戏签到"}, {"bbs", "米游币"}} {
 		r, exists := results[family.key]
 		if !exists {
 			continue
 		}
 		passed += r.Success
 		failed += r.Failed
-		skipped += r.Skipped
-		if family.key == "bbs" && r.Status == "already_complete" && r.Success == 0 && r.Failed == 0 {
-			details = append(details, "\n米游币任务：今日无待领取奖励（本次仅检查）")
-		} else {
-			details = append(details, fmt.Sprintf("\n%s：成功 %d · 失败 %d · 跳过 %d", family.label, r.Success, r.Failed, r.Skipped))
+		outcome := taskReportCounts(r)
+		if family.key == "bbs" {
+			if points := taskReportCoins(r); points != "" {
+				outcome = points
+			}
 		}
+		details = append(details, family.label+"："+truncate(sanitize(outcome, cfg, account), 220))
 		for _, detail := range r.Details {
 			if strings.Contains(detail, "余额不足") && (strings.Contains(detail, "打码") || strings.Contains(detail, "验证码")) {
 				balanceWarning = true
 			}
 		}
 		selected, omitted := taskReportDetails(r)
-		if omitted > 0 {
-			details = append(details, fmt.Sprintf("（另有 %d 条明细，完整记录见站内日志）", omitted))
-		}
+		omittedIssues = omittedIssues || omitted > 0
 		for _, detail := range selected {
-			details = append(details, "· "+truncate(sanitize(detail, cfg, account), 220))
+			if len(issues) < 3 {
+				issues = append(issues, "· "+truncate(sanitize(detail, cfg, account), 180))
+			} else {
+				omittedIssues = true
+			}
 		}
 	}
 	state := "签到完成"
@@ -66,10 +70,7 @@ func TaskEvent(cfg model.Config, account model.Account, results map[string]model
 	if balanceWarning {
 		state = "验证码服务余额不足"
 	}
-	header := fmt.Sprintf("账号：%s\n时间：%s\n本次操作：成功 %d · 失败 %d · 跳过 %d", sanitize(account.Name, cfg, account), reportTime(cfg, at), passed, failed, skipped)
-	if passed == 0 && failed == 0 && !cancelled {
-		header += "\n本次没有新增成功操作，具体原因见下方。"
-	}
+	header := fmt.Sprintf("账号：%s\n时间：%s", sanitize(account.Name, cfg, account), reportTime(cfg, at))
 	if cancelled {
 		header += "\n任务已停止"
 		if len(stopReason) > 0 && stopReason[0] != "" {
@@ -80,64 +81,111 @@ func TaskEvent(cfg model.Config, account model.Account, results map[string]model
 	if balanceWarning {
 		header += "\n请充值验证码服务后再重试相关签到。"
 	}
+	details = append(details, issues...)
+	if omittedIssues {
+		details = append(details, "其余异常请在站内查看。")
+	}
 	return Event{Kind: TaskEventKind, UserID: account.UserID, AccountID: account.ID, Title: "MiyoHub · " + state,
-		Message: header + strings.Join(details, "\n"), Success: failed == 0 && !cancelled && !balanceWarning}
+		Message: header + "\n\n" + strings.Join(details, "\n"), Success: failed == 0 && !cancelled && !balanceWarning}
 }
 
-// Completion notifications describe outcomes, not pending retry instructions.
-// The original details (including backoff and per-family totals) remain in the
-// account result and scoped run log. Keep errors ahead of routine success lines
-// when the notification needs truncation.
+func taskReportCounts(result model.TaskSummary) string {
+	if result.Success == 0 && result.Failed == 0 {
+		already := 0
+		for _, detail := range result.Details {
+			if strings.Contains(detail, "今日已签到") {
+				already++
+			}
+		}
+		if already > 0 && already == result.Skipped {
+			return fmt.Sprintf("今日已签到 %d", already)
+		}
+		if result.Skipped > 0 {
+			return fmt.Sprintf("未执行（跳过 %d 项）", result.Skipped)
+		}
+		return "未执行"
+	}
+	parts := []string{}
+	for _, item := range []struct {
+		label string
+		count int
+	}{{"成功", result.Success}, {"失败", result.Failed}, {"跳过", result.Skipped}} {
+		if item.count > 0 {
+			parts = append(parts, fmt.Sprintf("%s %d", item.label, item.count))
+		}
+	}
+	return strings.Join(parts, " · ")
+}
+
+var reportCoinOutcome = regexp.MustCompile(`^米游币本次新增 (\d+)，今日已得 (\d+)，剩余可得 (\d+)，余额 (-?\d+)$`)
+var reportCoinSnapshot = regexp.MustCompile(`^今日已得 (\d+)，还可获得 (\d+)，余额 (-?\d+)$`)
+
+// Use the final recorded balance, never infer rewards from successful request
+// counts. An initial snapshot is usable only for an already-complete check.
+func taskReportCoins(result model.TaskSummary) string {
+	for i := len(result.Details) - 1; i >= 0; i-- {
+		if match := reportCoinOutcome.FindStringSubmatch(result.Details[i]); match != nil {
+			line := fmt.Sprintf("本次新增 %s · 今日已得 %s · 剩余可得 %s · 余额 %s", match[1], match[2], match[3], match[4])
+			if result.Failed > 0 {
+				line += fmt.Sprintf(" · 失败 %d", result.Failed)
+			}
+			return line
+		}
+	}
+	if result.Status == "already_complete" && result.Success == 0 && result.Failed == 0 {
+		for i := len(result.Details) - 1; i >= 0; i-- {
+			if match := reportCoinSnapshot.FindStringSubmatch(result.Details[i]); match != nil {
+				return fmt.Sprintf("今日已得 %s · 剩余可得 %s · 余额 %s（本次仅检查）", match[1], match[2], match[3])
+			}
+		}
+		return "今日无待领取奖励（本次仅检查）"
+	}
+	return ""
+}
+
+// Keep troubleshooting reasons, not the full chronological log. Nothing here
+// mutates the stored task result or per-user execution log.
 func taskReportDetails(result model.TaskSummary) ([]string, int) {
-	var candidates []string
+	var candidates, fallback []string
+	seen := map[string]bool{}
+	add := func(detail string) {
+		if detail != "" && !seen[detail] {
+			seen[detail] = true
+			candidates = append(candidates, detail)
+		}
+	}
 	for _, detail := range result.Details {
 		if strings.HasPrefix(detail, "米游币任务状态查询遇到网络异常，") ||
+			strings.HasPrefix(detail, "米游币任务状态查询已恢复（") ||
+			strings.HasPrefix(detail, "米游币任务列表：") ||
+			strings.HasPrefix(detail, "米游币任务设置：") ||
+			strings.HasPrefix(detail, "米游币执行方式：") ||
 			strings.HasPrefix(detail, "游戏签到汇总：") ||
 			strings.HasPrefix(detail, "云游戏签到汇总：") ||
-			strings.HasPrefix(detail, "米游币操作汇总：") {
+			strings.HasPrefix(detail, "米游币操作汇总：") ||
+			reportCoinOutcome.MatchString(detail) || reportCoinSnapshot.MatchString(detail) {
 			continue
 		}
-		if result.Failed > 0 && strings.HasPrefix(detail, "米游币任务状态查询已恢复（") {
-			continue
+		important := false
+		for _, keyword := range []string{"失败", "未完成", "未确认", "尚未确认", "余额不足", "失效", "仍需验证码", "手动签到", "未绑定角色", "未配置", "无法", "已停止"} {
+			important = important || strings.Contains(detail, keyword)
 		}
-		candidates = append(candidates, detail)
-	}
-	if result.Reason != "" {
-		found := false
-		for _, detail := range candidates {
-			found = found || detail == result.Reason
-		}
-		if !found {
-			candidates = append(candidates, result.Reason)
+		if important {
+			add(detail)
+		} else {
+			fallback = append(fallback, detail)
 		}
 	}
-	if len(candidates) <= 5 {
-		return candidates, 0
+	if !(result.Status == "already_complete" && strings.HasPrefix(result.Reason, "今日已领取 ") && strings.Contains(result.Reason, "本次仅检查状态")) {
+		add(result.Reason)
 	}
-	chosen := make([]bool, len(candidates))
-	count := 0
-	for _, importantOnly := range []bool{true, false} {
-		for i := len(candidates) - 1; i >= 0 && count < 5; i-- {
-			if chosen[i] {
-				continue
-			}
-			important := candidates[i] == result.Reason
-			for _, keyword := range []string{"失败", "未完成", "未确认", "尚未确认", "余额不足", "失效", "仍需验证码", "手动签到"} {
-				important = important || strings.Contains(candidates[i], keyword)
-			}
-			if !importantOnly || important {
-				chosen[i] = true
-				count++
-			}
-		}
+	if len(candidates) == 0 && result.Failed > 0 && len(fallback) > 0 {
+		add(fallback[len(fallback)-1])
 	}
-	selected := make([]string, 0, count)
-	for i, detail := range candidates {
-		if chosen[i] {
-			selected = append(selected, detail)
-		}
+	if len(candidates) > 3 {
+		return candidates[:3], len(candidates) - 3
 	}
-	return selected, len(candidates) - len(selected)
+	return candidates, 0
 }
 
 func ExchangeEvent(cfg model.Config, account model.Account, plan model.ExchangePlan, state, message string, attempt int, at time.Time) Event {

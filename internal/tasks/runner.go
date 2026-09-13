@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"github.com/eleost04/miyohub/internal/auth"
@@ -228,8 +229,9 @@ func (r *Runner) run(ctx context.Context, accounts []model.Account, options RunO
 		if account.Device.ID != "" {
 			cfg.Device = account.Device
 		}
+		runID := "task_" + rand.Text()
 		emit := func(message string) {
-			_ = r.store.AddLogForUser(account.UserID, "task", account.Name+": "+message)
+			_ = r.store.AddTaskLogForUser(account.UserID, account.ID, runID, "task", account.Name+": "+message)
 			if strings.Contains(message, "登录凭据失效") {
 				_ = r.store.RecordAccountCheck(account.ID, "expired")
 			}
@@ -264,7 +266,7 @@ func (r *Runner) run(ctx context.Context, accounts []model.Account, options RunO
 				if len(details) < 200 {
 					details = append(details, message)
 				}
-				_ = r.store.AddLogForUser(account.UserID, key, account.Name+": "+message)
+				_ = r.store.AddTaskLogForUser(account.UserID, account.ID, runID, key, account.Name+": "+message)
 				if strings.Contains(message, "登录凭据失效") {
 					_ = r.store.RecordAccountCheck(account.ID, "expired")
 				}

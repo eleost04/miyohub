@@ -26,14 +26,14 @@ export interface Config {
   features: { game_checkin: boolean; cloud_game_checkin: boolean; bbs_tasks: boolean }
   games: { enabled: string[]; black_list: Record<string, string[]> }
   cloud_games: { enabled: string[] }
-  bbs: { forums: number[]; checkin: boolean; read: boolean; like: boolean; share: boolean; cancel_like: boolean; post_limit: number; delay_seconds: number[] }
+  bbs: { run_all_selected?: boolean; forums: number[]; checkin: boolean; read: boolean; like: boolean; share: boolean; cancel_like: boolean; post_limit: number; delay_seconds: number[] }
   network: { bbs_state_retries?: number; proxy: ProxySettings }
   schedule: { enable: boolean; time: string; timezone: string; jitter_minutes: number; run_on_start: boolean }
   push: { error_only: boolean; channels: Array<{ provider: string; enable: boolean }> }
   captcha: { max_retries: number; channels: CaptchaChannel[] }
   shop_exchange: { enable: boolean; retry_seconds: number; retry_interval: number; plans: ExchangePlan[] }
 }
-export interface LogEntry { at: string; component: string; message: string }
+export interface LogEntry { at: string; component: string; message: string; account_id?: string; run_id?: string }
 export interface SchedulerStatus {
   enabled: boolean
   running: boolean

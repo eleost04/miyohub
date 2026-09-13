@@ -192,6 +192,10 @@ button { -webkit-tap-highlight-color: transparent; }
 .activity-row time { color: #a29a86; font-size: 10px; font-variant-numeric: tabular-nums; }
 .log-kind { font-size: 10px; color: #839173; }
 .activity-row p { margin: 0; font-size: 11px; line-height: 1.8; color: #757461; overflow-wrap: anywhere; }
+.activity-message { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; }
+.activity-message .log-message { min-width: 0; font: inherit; font-size: 11px; line-height: 1.8; color: #757461; overflow-wrap: anywhere; }
+.log-detail-hint { flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; color: #82916f; font-size: 10px; }
+.activity-message:focus-visible { outline: 2px solid #a6b793; outline-offset: 4px; border-radius: 5px; }
 .activity-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 15px; color: #aaa38e; font-size: 10px; }
 .live-label { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; color: #7e966e; font-size: 10px; font-weight: 400; }
 .live-label::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #8ca47c; }
@@ -460,7 +464,7 @@ button { -webkit-tap-highlight-color: transparent; }
   .hero-card { padding: 25px; min-height: 0; border-radius: 19px; } .hero-card h2 { font-size: 30px; line-height: 1.4; } .hero-action { width: 100%; align-items: center; } .hero-action .button { width: 100%; }
   .panel { padding: 18px; } .panel-title h2 { font-size: 17px; } .panel-title .eyebrow { font-size: 8px; letter-spacing: .12em; }
   .account-card { padding: 13px; } .account-actions .text-button { margin-left: 0; } .account-identity strong { font-size: 12px; }
-  .activity-row { grid-template-columns: minmax(0,1fr) auto; gap: 5px 10px; padding: 12px 0; } .activity-row p { grid-column: 1 / -1; }
+  .activity-row { grid-template-columns: minmax(0,1fr) auto; gap: 5px 10px; padding: 12px 0; } .activity-row p, .activity-row .activity-message { grid-column: 1 / -1; } .activity-row .activity-message { min-height: 40px; }
   .activity-toolbar { gap: 7px; } .activity-toolbar select { max-width: 105px; padding: 9px 6px; }
   .good-image { flex-basis: 88px; } .good-body { padding: 14px; } .good-card { min-height: 206px; } .good-price { font-size: 23px; }
   .exchange-plan { padding: 14px; } .plan-heading { gap: 9px; } .plan-heading .pill { font-size: 9px; padding: 5px 7px; } .plans-panel > .panel-title select { padding: 8px 6px; max-width: 130px; }

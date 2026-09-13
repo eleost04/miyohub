@@ -819,7 +819,22 @@ func (s *Store) AddLogForUser(userID, component, message string) error {
 	if userID != "" && s.userIndexLocked(userID) < 0 {
 		return nil
 	}
-	s.data.Logs = append(s.data.Logs, model.LogEntry{At: time.Now(), Component: component, Message: message, UserID: userID})
+	return s.appendLogLocked(model.LogEntry{At: time.Now(), Component: component, Message: message, UserID: userID})
+}
+
+// A display name is not an identity. Correlate only owned account runs, while
+// leaving legacy entries untouched and preserving the existing scoped reader.
+func (s *Store) AddTaskLogForUser(userID, accountID, runID, component, message string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if userID == "" || runID == "" || len(runID) > 96 || s.userIndexLocked(userID) < 0 || !s.accountOwnedLocked(userID, false, accountID) {
+		return errors.New("任务日志归属或执行编号无效")
+	}
+	return s.appendLogLocked(model.LogEntry{At: time.Now(), Component: component, Message: message, UserID: userID, AccountID: accountID, RunID: runID})
+}
+
+func (s *Store) appendLogLocked(entry model.LogEntry) error {
+	s.data.Logs = append(s.data.Logs, entry)
 	if len(s.data.Logs) > 500 {
 		s.data.Logs = s.data.Logs[len(s.data.Logs)-500:]
 	}
