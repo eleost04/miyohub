@@ -2,7 +2,7 @@
 
 [Feature board](ROADMAP.md) · [Contributing and maintenance](CONTRIBUTING.md) · [Issues](https://github.com/eleost04/miyohub/issues) · [Security policy](.github/SECURITY.md)
 
-[简体中文](README.md) · Version **0.1.0-beta.2**
+[简体中文](README.md) · Version **0.1.0-beta.3**
 
 Self-hosted MiYouShe check-ins, community coin tasks and merchandise exchange management, built with Go and Vue 3. This is not an official HoYoverse product. Upstream APIs, account challenges and stock can change; task rewards and successful exchanges are not guaranteed.
 
@@ -26,7 +26,7 @@ For development, use `git clone --branch develop https://github.com/eleost04/miy
 Requires Docker Engine and Compose v2.
 
 ```bash
-git clone --branch v0.1.0-beta.2 --depth 1 https://github.com/eleost04/miyohub.git
+git clone --branch v0.1.0-beta.3 --depth 1 https://github.com/eleost04/miyohub.git
 cd miyohub
 cp .env.example .env
 docker compose up -d --build

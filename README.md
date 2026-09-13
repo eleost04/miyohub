@@ -1,6 +1,6 @@
 # MiyoHub
 
-[English](README.en.md) · 当前版本：**0.1.0-beta.2**
+[English](README.en.md) · 当前版本：**0.1.0-beta.3**
 
 [功能看板](ROADMAP.md) · [参与开发与维护规范](CONTRIBUTING.md) · [问题反馈](https://github.com/eleost04/miyohub/issues) · [安全政策](.github/SECURITY.md)
 
@@ -26,7 +26,7 @@
 需要 Docker Engine 和 Compose v2。
 
 ```bash
-git clone --branch v0.1.0-beta.2 --depth 1 https://github.com/eleost04/miyohub.git
+git clone --branch v0.1.0-beta.3 --depth 1 https://github.com/eleost04/miyohub.git
 cd miyohub
 cp .env.example .env
 docker compose up -d --build
