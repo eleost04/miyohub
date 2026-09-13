@@ -1,6 +1,56 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
+
+for (const width of [320, 390, 1440]) test(`品牌图标 ${width}px：加载、登录、注册及初始化异常保持固定尺寸`, async ({ page }, testInfo) => {
+  const origin = 'http://127.0.0.1:4177'
+  await page.setViewportSize({ width, height: 900 })
+  let releaseBootstrap
+  const bootstrapGate = new Promise(resolve => { releaseBootstrap = resolve })
+  let response = { status: 200, json: { ok: true, data: { auth: { need_auth: true, has_admin: true, registration_mode: 'closed' } } } }
+  const unexpectedRequests = []
+  await page.route('**/*', async route => {
+    const url = new URL(route.request().url())
+    if (url.origin !== origin) { unexpectedRequests.push(url.origin); await route.abort(); return }
+    if (url.pathname === '/api/v1/bootstrap') {
+      await bootstrapGate
+      await route.fulfill(response)
+      return
+    }
+    if (url.pathname.startsWith('/api/')) { unexpectedRequests.push(url.pathname); await route.abort(); return }
+    await route.continue()
+  })
+  const logo = page.locator('.auth-card .brand-symbol')
+  const checkSize = async () => {
+    await expect(logo).toBeVisible()
+    const box = await logo.boundingBox()
+    expect({ width: box.width, height: box.height }).toEqual({ width: 34, height: 34 })
+    await expect(logo).toHaveAttribute('width', '34')
+    await expect(logo).toHaveAttribute('height', '34')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  }
+  try {
+    await page.goto(origin)
+    await expect(page.getByText('正在加载…', { exact: true })).toBeVisible()
+    await checkSize()
+    await page.screenshot({ path: testInfo.outputPath(`brand-loading-${width}.png`), fullPage: true })
+  } finally { releaseBootstrap() }
+  await expect(page.getByRole('heading', { name: '登录 MiyoHub', exact: true })).toBeVisible()
+  await checkSize()
+  await page.screenshot({ path: testInfo.outputPath(`brand-login-${width}.png`), fullPage: true })
+  await page.getByRole('button', { name: '还没有账号？创建一个', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '注册站点账号', exact: true })).toBeVisible()
+  await checkSize()
+  response.json.data.auth.has_admin = false
+  await page.reload()
+  await expect(page.getByRole('heading', { name: '创建管理员账号', exact: true })).toBeVisible()
+  await checkSize()
+  response = { status: 503, json: { ok: false, error: '测试初始化失败，请刷新后重试。' } }
+  await page.reload()
+  await expect(page.getByRole('alert')).toHaveText('测试初始化失败，请刷新后重试。')
+  await checkSize()
+  expect(unexpectedRequests).toEqual([])
+})
 
 test('矢量图标统一留白、无需外部素材，并生成可检查的图标样张', async ({ page }, testInfo) => {
   const icons = []
