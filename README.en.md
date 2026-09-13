@@ -1,6 +1,6 @@
 # MiyoHub
 
-[Feature board](ROADMAP.md) · [Contributing and maintenance](CONTRIBUTING.md) · [Issues](https://github.com/eleost04/miyohub/issues)
+[Feature board](ROADMAP.md) · [Contributing and maintenance](CONTRIBUTING.md) · [Issues](https://github.com/eleost04/miyohub/issues) · [Security policy](.github/SECURITY.md)
 
 [简体中文](README.md) · Version **0.0.1**
 
@@ -16,6 +16,12 @@ Self-hosted MiYouShe check-ins, community coin tasks and merchandise exchange ma
 - Responsive selectors, layered browser Back, preference autosave, contextual mobile save buttons, dismissible onboarding, SVG icons and commit-linked release notes.
 
 A site user is the ownership boundary. Administrators cannot browse another user's game accounts, private logs or reservations in the task workspace. System settings and user administration are separate.
+
+## Stable and development branches
+
+This branch retains the `0.0.1` stable application while repository documentation and verification rules continue to improve. See the [develop guide](https://github.com/eleost04/miyohub/blob/develop/README.en.md), [roadmap](ROADMAP.md) and [Releases](https://github.com/eleost04/miyohub/releases) for Beta features, configuration changes and development images. Do not mix the stable configuration documented here with a Beta Compose file.
+
+For development, use `git clone --branch develop https://github.com/eleost04/miyohub.git`. In an existing full clone, run `git fetch origin develop` followed by `git switch develop`, then create a `fix/<topic>` or `feat/<topic>` branch.
 
 ## Quick start
 
@@ -35,6 +41,36 @@ The default port binds to loopback. Create the administrator locally before publ
 The container is named `miyohub`, the persistent volume is `miyohub_miyohub-data`, and the network is `miyohub_default`. The process is non-root with a read-only root filesystem. **Do not use `docker compose down -v` to upgrade**: it deletes the account-data volume.
 
 The optional [miyohub-captcha](https://github.com/eleost04/miyohub-captcha) companion provides a local CPU solver. The main application can run without it.
+
+## Environment variables
+
+Compose reads the deployment variables below from the project's `.env`. Copy `.env.example`, edit it as needed and use restrictive permissions (`chmod 600 .env`). Commit only the example. The standalone program **does not load `.env` automatically**: use process environment variables or CLI flags.
+
+| Variable | Default | Purpose / caveat |
+| --- | --- | --- |
+| `MIYOHUB_BIND_ADDR` | `127.0.0.1` | Compose only: host bind address; keep loopback behind a host reverse proxy |
+| `MIYOHUB_HTTP_PORT` | `5890` | Compose only: published host port, not the internal container port |
+| `MIYOHUB_PUBLIC_ORIGIN` | empty | Exact browser origin such as `https://miyohub.example.com`, without a path; scheme, host and port must match |
+| `MIYOHUB_SECURE_COOKIE` | `false` | Set to `true` for HTTPS; cookies then require HTTPS, so leave off for plain-HTTP local access |
+| `MIYOHUB_PUSH_ALLOW_PRIVATE` | `false` | `true` allows **every site user's** notification endpoints to reach private / loopback addresses; use only in a fully trusted deployment |
+
+Only lowercase `true` enables boolean variables. After Compose environment changes, recreate with `docker compose up -d --force-recreate`; `docker compose restart` does not update the environment.
+
+The standalone binary / `go run` also supports these variables. Equivalent CLI flags take precedence:
+
+| Variable | Standalone default | CLI flag / container behavior |
+| --- | --- | --- |
+| `MIYOHUB_HOST` | `127.0.0.1` | `--host`; the image sets `0.0.0.0` internally |
+| `MIYOHUB_PORT` | `5890` | `--port`; Compose health checks use this default internal port |
+| `MIYOHUB_DATA_DIR` | `data` | `--data-dir`; the image uses the persistent `/data` volume; retain both state and key |
+| `MIYOHUB_WEB_DIR` | `web/dist` | `--web-dir`; relative to the working directory, `/app/web/dist` in the image |
+
+```bash
+MIYOHUB_HOST=127.0.0.1 MIYOHUB_PORT=5890 MIYOHUB_DATA_DIR=./data \
+  go run ./cmd/miyohub serve --web-dir ./web/dist
+```
+
+Putting standalone-only variables in Compose's `.env` does not inject them into the container; the supplied Compose file passes only its declared deployment variables. Configure credentials, schedules, captcha and notification keys in the web UI. `MIYOHUB_ADMIN_PASSWORD` and Cookie environment-based account creation are not supported. Version `0.0.1` does not provide the web proxy settings or the `MIYOHUB_IMAGE` selector; use the target development version's documentation and Compose file for those capabilities.
 
 ## HTTPS and Caddy
 
@@ -117,7 +153,7 @@ Reference footprint from a Linux/amd64 build on 2026-09-11. Image sizes are unco
 
 For both services, allow at least 2 CPUs, 2 GiB RAM and over 3 GiB free disk. Local builds should have 4 GiB RAM and at least 5 GiB free disk, excluding growing caches/backups/logs. Idle measurements are not peak-capacity guarantees. The solver uses one worker; increasing workers is not supported.
 
-Releases currently provide source and Linux archives, **not automatically published Docker images**. Any image distribution should use explicit version and rollback tags. Check usage and redistribution rights separately for the solver's third-party runtime code and model weights.
+Stable tags publish source and Linux archives. `develop` additionally supports private images after complete CI and signed-source verification; see the [development image guide](https://github.com/eleost04/miyohub/blob/develop/README.en.md#tracking-development-images). Publishing does not automatically replace production containers. Review the target version's Compose file and configuration before switching images. Solver images and models are not included; check their third-party redistribution terms separately.
 
 ## Upgrade, backup and logs
 
@@ -139,7 +175,7 @@ npm --prefix web ci
 npm --prefix web run build
 go test -race ./...
 go vet ./...
-node --test scripts/actions-state.test.mjs
+node --test scripts/*.test.mjs
 node scripts/check-version.mjs
 node scripts/check-repository.mjs
 cd web
@@ -152,6 +188,8 @@ Real-API browser scenarios each use their own process, temporary encrypted state
 See [CONTRIBUTING.md](CONTRIBUTING.md) for focused changes, `fix` / `feat` commits, GPG signatures, branches, version increments and release gates. [ROADMAP.md](ROADMAP.md) tracks capabilities, known issues and comparison with reference projects. User-facing changes appear in the in-app changelog.
 
 Release automation verifies signed tags and branch ancestry, then builds Linux amd64/arm64 archives with frontend assets. Arm64 is cross-compiled but not hardware-validated. Test and release workflows support manual recovery without skipping checks or overwriting existing releases.
+
+GitHub Actions never runs account check-ins, exchanges or notifications and does not need account state or keys. Schedule account tasks on your own Docker host / server. CI runs for pushes to `main` / `develop`, PRs targeting them, and manual requests. Documentation-only changes retain privacy and repository checks but skip Go, browser and Docker builds. Validate each focused change locally, sign and push it, then integrate through a PR.
 
 Versioned content is limited to core source, necessary tests, dependency locks, build/CI configuration and bilingual README files. Exclusions include real `.env*` files, data/state/keys, `docs/`, backups, logs, dependencies, build products, browser reports and archives. The companion also excludes upstream checkouts, model weights and challenge images. History secret scanning supplements, not replaces, review before committing.
 
