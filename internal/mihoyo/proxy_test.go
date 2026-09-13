@@ -83,8 +83,16 @@ func TestHTTPProxyConnectAuthenticationAndLiveSettings(t *testing.T) {
 	target, base := proxyTLSFixture(t)
 	var connections atomic.Int32
 	var tunnels sync.WaitGroup
+	// This fixture expects one CONNECT. Register it before starting the server:
+	// receiving a response over TCP does not synchronize Add with Wait in Go.
+	tunnels.Add(1)
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		connections.Add(1)
+		if connections.Add(1) != 1 {
+			t.Error("unexpected additional CONNECT request")
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		defer tunnels.Done()
 		if r.Method != http.MethodConnect || r.Host != "api-takumi.mihoyo.com:443" || r.Header.Get("Cookie") != "" || r.Header.Get("Proxy-Authorization") != "Basic "+base64.StdEncoding.EncodeToString([]byte("fixture-user:fixture-password")) {
 			t.Error("invalid CONNECT or proxy auth")
 			w.WriteHeader(http.StatusProxyAuthRequired)
@@ -97,8 +105,6 @@ func TestHTTPProxyConnectAuthenticationAndLiveSettings(t *testing.T) {
 		}
 		_, _ = rw.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n")
 		_ = rw.Flush()
-		tunnels.Add(1)
-		defer tunnels.Done()
 		tunnelFixture(t, conn, target.URL)
 	}))
 	defer proxy.Close()

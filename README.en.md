@@ -2,7 +2,7 @@
 
 [Feature board](ROADMAP.md) · [Contributing and maintenance](CONTRIBUTING.md) · [Issues](https://github.com/eleost04/miyohub/issues) · [Security policy](.github/SECURITY.md)
 
-[简体中文](README.md) · Version **0.1.0-beta.2**
+[简体中文](README.md) · Version **0.1.0-beta.3**
 
 Self-hosted MiYouShe check-ins, community coin tasks and merchandise exchange management, built with Go and Vue 3. This is not an official HoYoverse product. Upstream APIs, account challenges and stock can change; task rewards and successful exchanges are not guaranteed.
 
@@ -26,7 +26,7 @@ For development, use `git clone --branch develop https://github.com/eleost04/miy
 Requires Docker Engine and Compose v2.
 
 ```bash
-git clone --branch v0.1.0-beta.2 --depth 1 https://github.com/eleost04/miyohub.git
+git clone --branch v0.1.0-beta.3 --depth 1 https://github.com/eleost04/miyohub.git
 cd miyohub
 cp .env.example .env
 docker compose up -d --build
@@ -166,13 +166,13 @@ Preferences autosave about one second after editing stops, with a browser-local 
 
 ## Performance and resources
 
-Normal UI assets are small SVGs; ICO/iOS PNG files exist only for compatibility. Pages, editors, QR generation and human-verification scripts load on demand. Brotli/gzip are generated at build time. Hashed assets are immutable for one year, HTML revalidates, and private APIs are not cached. Product images use restricted official-CDN 302 redirects without downloading images through the application server; this cannot fix an unreachable CDN.
+Normal UI assets are small SVGs; ICO/iOS PNG files exist only for compatibility. Pages, editors, QR generation and human-verification scripts load on demand. Brotli/gzip are generated at build time. The application defaults to one-year immutable caching for hashed assets (a reverse proxy may override it), HTML revalidates, and private APIs are not cached. Product images use restricted official-CDN 302 redirects without downloading images through the application server; this cannot fix an unreachable CDN.
 
-Reference footprint from a Linux/amd64 build on 2026-09-11. Image sizes are uncompressed; runtime memory depends on workload:
+Reference Linux/amd64 footprints: the main app is a beta.2 sample from 2026-09-13; the captcha service is a sample from 2026-09-11. Image sizes are uncompressed; runtime memory depends on workload:
 
 | Service | Image | Example idle RAM | Suggested allocation |
 | --- | ---: | ---: | --- |
-| MiyoHub | 18.6 MiB | approximately 14 MiB just after startup | 1 CPU, 256 MiB RAM |
+| MiyoHub | 18.9 MiB | approximately 14.4 MiB after startup and bot connection | 1 CPU, 256 MiB RAM |
 | Optional captcha service | 364.1 MiB plus about 177 MiB of models | approximately 352 MiB after startup; earlier running sample 535 MiB | 2 CPUs, 1.5 GiB RAM |
 
 For both services, allow at least 2 CPUs, 2 GiB RAM and over 3 GiB free disk. Local builds should have 4 GiB RAM and at least 5 GiB free disk, excluding growing caches/backups/logs. Idle measurements are not peak-capacity guarantees. The solver uses one worker; increasing workers is not supported.
@@ -180,6 +180,8 @@ For both services, allow at least 2 CPUs, 2 GiB RAM and over 3 GiB free disk. Lo
 Signed releases provide source and Linux archives. An opt-in private development-image pipeline is available for the main app. Companion solver images and model weights are not uploaded with it; verify their third-party redistribution rights separately.
 
 ## Tracking development images
+
+The first amd64 / arm64 publication and post-publication private-visibility check passed in [CI on 2026-09-13](https://github.com/eleost04/miyohub/actions/runs/34727237905). Building both architectures does not establish arm64 hardware acceptance.
 
 Maintainers can set the Actions variable `MIYOHUB_PUBLISH_DEV_IMAGE=true`. After code CI passes on `develop`, it publishes Linux amd64 / arm64 images:
 
