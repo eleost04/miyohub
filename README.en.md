@@ -139,7 +139,7 @@ npm --prefix web ci
 npm --prefix web run build
 go test -race ./...
 go vet ./...
-node --test scripts/actions-state.test.mjs
+node --test scripts/*.test.mjs
 node scripts/check-version.mjs
 node scripts/check-repository.mjs
 cd web

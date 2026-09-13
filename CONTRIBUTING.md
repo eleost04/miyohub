@@ -59,7 +59,7 @@ Risk: Actual permission revocation must still stop further requests.
 
 ## 验证门槛
 
-后端：`go test -race ./...`、`go vet ./...`。流程与仓库边界：`node --test scripts/actions-state.test.mjs`、`node scripts/check-version.mjs`、`node scripts/check-repository.mjs`。前端：`npm --prefix web ci`、`npm --prefix web run build`，然后在 `web` 目录运行 `npx playwright test`。
+后端：`go test -race ./...`、`go vet ./...`。流程与仓库边界：`node --test scripts/*.test.mjs`、`node scripts/check-version.mjs`、`node scripts/check-repository.mjs`。前端：`npm --prefix web ci`、`npm --prefix web run build`，然后在 `web` 目录运行 `npx playwright test`。
 
 浏览器测试使用独立临时状态及原有鉴权，不关闭生产限流，不复用生产账号。至少覆盖 320/390 像素手机及桌面布局，检查弹窗、返回、自动保存、键盘操作和首屏资源预算。
 
