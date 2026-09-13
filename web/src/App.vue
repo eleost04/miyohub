@@ -26,16 +26,20 @@ const AdminPanel = defineAsyncComponent({ ...pageLoadOptions, loader: () => impo
 const ProfilePanel = defineAsyncComponent({ ...pageLoadOptions, loader: () => import('./components/ProfilePanel.vue') })
 const OnboardingGuide = defineAsyncComponent({ ...pageLoadOptions, loader: () => import('./components/OnboardingGuide.vue') })
 const ChangelogPanel = defineAsyncComponent({ ...pageLoadOptions, loader: () => import('./components/ChangelogPanel.vue') })
+const GameNotesPanel = defineAsyncComponent({ ...pageLoadOptions, loader: () => import('./components/GameNotesPanel.vue') })
+const CalendarPanel = defineAsyncComponent({ ...pageLoadOptions, loader: () => import('./components/CalendarPanel.vue') })
 
 const auth = ref<AuthStatus | null>(null), user = ref<User | null>(null), config = ref<Config | null>(null)
 const serverVersion = ref('')
 const status = ref<Status>({ running: false, logs: [] })
 const mode = ref<'login' | 'setup' | 'register'>('login')
-type View = 'dashboard' | 'shop' | 'notifications' | 'captcha' | 'logs' | 'settings' | 'profile' | 'admin' | 'changelog'
+type View = 'dashboard' | 'shop' | 'notes' | 'calendar' | 'notifications' | 'captcha' | 'logs' | 'settings' | 'profile' | 'admin' | 'changelog'
 const view = ref<View>('dashboard')
 const navigation = computed(() => [
   { key: 'dashboard' as View, icon: 'home', label: '任务总览', group: '任务管理' },
   { key: 'shop' as View, icon: 'gift', label: '商品兑换', group: '任务管理' },
+  { key: 'notes' as View, icon: 'activity', label: '游戏便笺', group: '任务管理' },
+  { key: 'calendar' as View, icon: 'clock', label: '活动日历', group: '任务管理' },
   { key: 'logs' as View, icon: 'activity', label: '运行日志', group: '任务管理' },
   { key: 'notifications' as View, icon: 'bell', label: '消息推送', group: '个人服务' },
   { key: 'captcha' as View, icon: 'shield', label: '打码服务', group: '个人服务' },
@@ -45,7 +49,7 @@ const navigation = computed(() => [
 ])
 const mobileNavigation = computed(() => navigation.value.filter(item => ['dashboard', 'shop', 'notifications'].includes(item.key)))
 const moreItems = computed(() => navigation.value.filter(item => !mobileNavigation.value.some(primary => primary.key === item.key)))
-const pageDescriptions: Record<View, string> = { dashboard: '查看账号状态，配置并执行签到任务。', shop: '浏览米游币商品，管理兑换预约与结果。', notifications: '配置签到、兑换结果的通知渠道。', captcha: '选择个人打码渠道或已获授权的站点服务。', logs: '查看任务执行记录与异常原因。', settings: '管理站点运行、每日调度与公共基础服务。', profile: '管理站点登录账号与密码。', admin: '管理用户、服务权限与邀请码。', changelog: '查看版本、功能改动和关联提交。' }
+const pageDescriptions: Record<View, string> = { dashboard: '查看账号状态，配置并执行签到任务。', shop: '浏览米游币商品，管理兑换预约与结果。', notes: '按需查看游戏体力与日常进度。', calendar: '查看活动时间，记录已公告的版本日程。', notifications: '配置签到、兑换结果的通知渠道。', captcha: '选择个人打码渠道或已获授权的站点服务。', logs: '查看任务执行记录与异常原因。', settings: '管理站点运行、每日调度与公共基础服务。', profile: '管理站点登录账号与密码。', admin: '管理用户、服务权限与邀请码。', changelog: '查看版本、功能改动和关联提交。' }
 const pushPanel = ref<InstanceType<typeof PushPanel> | null>(null), captchaPanel = ref<InstanceType<typeof CaptchaPanel> | null>(null), settingsPanel = ref<InstanceType<typeof SettingsPanel> | null>(null)
 const moreNavigation = ref(false), pendingView = ref<View | null>(null)
 const taskAccount = ref<Account | null>(null), selectTaskAccount = ref(false)
@@ -237,7 +241,7 @@ onUnmounted(() => { disposeHistory(); window.removeEventListener('miyohub:unauth
           <div class="hero-action"><button v-if="status.running" class="button dark" :disabled="busy" @click="stopRun()"><AppIcon name="stop" />停止本轮任务</button><button v-else class="button dark" :disabled="busy || !config.enabled || !config.accounts.some(a => !a.disabled && hasTasks(a))" @click="runNow()">{{ busy ? '正在启动…' : '开始今日签到' }}<AppIcon name="arrow" /></button><small>{{ !config.enabled ? '管理员已暂停站点签到任务' : status.running ? '正在逐个处理账号，请稍候' : '每个账号按自己的签到设置执行' }}</small><button class="text-button hero-select" :disabled="busy || !config.enabled || !config.accounts.some(a => !a.disabled && hasTasks(a))" @click="error = ''; showTaskSelection = true"><AppIcon name="filter" :size="14" />自选账号与任务</button></div>
         </section>
         <section class="content-grid">
-          <AccountsPanel :accounts="config.accounts" :tasks="status.tasks || []" :user-id="user.id" :enabled="config.enabled" :timezone="timezone" :action-busy="busy" @changed="safeRefresh" @bind="openBind" @configure="account => taskAccount = account" @run="id => runNow([id])" @stop="id => stopRun([id])" />
+          <AccountsPanel :accounts="config.accounts" :tasks="status.tasks || []" :user-id="user.id" :enabled="config.enabled" :timezone="timezone" :action-busy="busy" @changed="safeRefresh" @bind="openBind" @configure="account => taskAccount = account" @run="id => runNow([id])" @batch-run="ids => runNow(ids)" @stop="id => stopRun([id])" />
           <article class="panel schedule-panel"><div class="panel-title"><div><p class="eyebrow">自动执行</p><h2>我的自动签到</h2></div><span class="pill" :class="{ soft: config.enabled && scheduledAccounts.length }">{{ !config.enabled ? '站点已暂停' : !scheduledAccounts.length ? '尚未安排' : scheduledAccounts.length + ' 个账号参与' }}</span></div><div class="schedule-clock"><AppIcon name="clock" :size="24" /><div class="schedule-time">{{ nextCheckinTime }}</div></div><p class="muted">下次执行时间 · {{ timezone }}</p><div class="schedule-divider"></div><p class="schedule-caption">下一次执行</p><p class="schedule-next">{{ !config.enabled ? '站点签到已暂停' : !scheduledAccounts.length ? '请在账号设置中开启自动签到并选择时间' : formatDate(status.scheduler?.next_run || '', timezone) }}</p><p v-if="status.scheduler?.last_error" class="error-text">{{ status.scheduler.last_error }}</p><p class="muted">按各账号的个人时间安排；未设置个人时间时使用站点默认时间。这里展示你的账号中最近的一次调度。</p><button class="text-button schedule-link" :disabled="!config.accounts.length" @click="selectTaskAccount = true">调整账号签到设置<AppIcon name="arrow" :size="15" /></button><button v-if="user.role === 'admin'" class="text-button schedule-link" @click="navigate('settings')">管理站点默认时间<AppIcon name="arrow" :size="15" /></button></article>
         </section>
         <ActivityPanel :logs="status.logs" :running="status.running" :timezone="timezone" compact @all="navigate('logs')" />
@@ -246,9 +250,11 @@ onUnmounted(() => { disposeHistory(); window.removeEventListener('miyohub:unauth
       <ShopPanel v-else-if="view === 'shop' && config" :config="config" :user="user" @changed="safeRefresh" />
       <PushPanel v-else-if="view === 'notifications'" ref="pushPanel" :timezone="timezone" />
       <CaptchaPanel v-else-if="view === 'captcha'" ref="captchaPanel" :user="user" />
+      <GameNotesPanel v-else-if="view === 'notes' && config" :accounts="config.accounts" :timezone="timezone" />
+      <CalendarPanel v-else-if="view === 'calendar' && config" :accounts="config.accounts" :timezone="timezone" @navigate="navigate" />
       <ActivityPanel v-else-if="view === 'logs'" :logs="status.logs" :running="status.running" :timezone="timezone" />
       <SettingsPanel v-else-if="view === 'settings' && config && user.role === 'admin'" ref="settingsPanel" :config="config" :admin="true" @saved="safeRefresh" @navigate="navigate" />
-      <ProfilePanel v-else-if="view === 'profile'" :user="user" @guide="openGuide" />
+      <ProfilePanel v-else-if="view === 'profile'" :user="user" @guide="openGuide" @changed="safeRefresh" />
       <AdminPanel v-else-if="view === 'admin' && user.role === 'admin'" :user="user" :timezone="timezone" />
       <ChangelogPanel v-else-if="view === 'changelog'" :server-version="serverVersion" />
       <div v-else class="panel empty"><p>正在加载控制台…</p><button class="small-button" @click="safeRefresh">重新加载</button></div>

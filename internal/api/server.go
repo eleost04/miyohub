@@ -12,6 +12,7 @@ import (
 
 	"github.com/eleost04/miyohub/internal/auth"
 	"github.com/eleost04/miyohub/internal/buildinfo"
+	"github.com/eleost04/miyohub/internal/gamerecord"
 	"github.com/eleost04/miyohub/internal/mihoyo"
 	"github.com/eleost04/miyohub/internal/model"
 	"github.com/eleost04/miyohub/internal/notify"
@@ -38,6 +39,8 @@ type Server struct {
 	weixin       *notify.WeixinMonitor
 	qqbot        *notify.QQMonitor
 	probes       captchaProbes
+	archives     archiveSessions
+	records      *gamerecord.Service
 }
 
 func NewServer(s *store.Store) *Server { return NewServerWithOptions(s, Options{}) }
@@ -47,6 +50,7 @@ func NewServerWithOptions(s *store.Store, options Options) *Server {
 	}
 	server := &Server{options: options, store: s, runner: tasks.NewRunner(s), qr: auth.NewQRManager(s), sms: auth.NewSMSManager(s), shopClient: mihoyo.NewClient("", s.NetworkConfig)}
 	server.exchange = shop.NewEngine(s, server.shopClient)
+	server.records = gamerecord.New(mihoyo.NewClient("", s.NetworkConfig))
 	sender := notify.Sender{HTTP: notify.NewHTTPClient()}
 	server.pushSender = sender
 	server.push = notify.NewDispatcher(s, sender)
@@ -90,6 +94,8 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Stop() {
+	s.records.Stop()
+	s.archives.clear()
 	s.personal.Stop()
 	s.probes.stop()
 	s.runner.Stop()
@@ -115,6 +121,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/auth/password", s.withAuth(s.changePassword))
 	mux.HandleFunc("/api/v1/auth/me", s.withAuth(s.me))
 	mux.HandleFunc("/api/v1/profile/onboarding", s.withAuth(s.onboarding))
+	mux.HandleFunc("/api/v1/profile/archive/export", s.withAuth(s.archiveExport))
+	mux.HandleFunc("/api/v1/profile/archive/preview", s.withAuth(s.archivePreview))
+	mux.HandleFunc("/api/v1/profile/archive/import", s.withAuth(s.archiveImport))
 	mux.HandleFunc("/api/v1/admin/users", s.withAuth(s.adminUsers))
 	mux.HandleFunc("/api/v1/admin/users/status", s.withAuth(s.adminUserStatus))
 	mux.HandleFunc("/api/v1/admin/users/role", s.withAuth(s.adminUserRole))
@@ -130,6 +139,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/accounts", s.withAuth(s.accounts))
 	mux.HandleFunc("/api/v1/accounts/check", s.withAuth(s.accountCheck))
 	mux.HandleFunc("/api/v1/accounts/tasks", s.withAuth(s.accountTasks))
+	mux.HandleFunc("/api/v1/accounts/batch", s.withAuth(s.accountBatch))
+	mux.HandleFunc("/api/v1/game-record/note", s.withAuth(s.gameNote))
+	mux.HandleFunc("/api/v1/game-record/calendar", s.withAuth(s.gameCalendar))
+	mux.HandleFunc("/api/v1/calendar/custom", s.withAuth(s.customCalendar))
+	mux.HandleFunc("/api/v1/calendar/reminders", s.withAuth(s.calendarReminders))
+	mux.HandleFunc("/api/v1/calendar/reminders/history", s.withAuth(s.calendarReminderHistory))
 	mux.HandleFunc("/api/v1/captcha/config", s.withAuth(s.captchaConfig))
 	mux.HandleFunc("/api/v1/captcha/test", s.withAuth(s.captchaTest))
 	mux.HandleFunc("/api/v1/push/test", s.withAuth(s.pushTest))

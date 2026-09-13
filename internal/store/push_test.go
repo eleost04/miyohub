@@ -28,7 +28,7 @@ func pushFixture(t *testing.T) (*Store, model.User, model.User) {
 	return s, a, u
 }
 func pushPatch(view PushSettings) PushSettingsPatch {
-	p := PushSettingsPatch{Enabled: view.Enabled, Tasks: view.Tasks, Exchange: view.Exchange, ErrorOnly: view.ErrorOnly, Revision: view.Revision}
+	p := PushSettingsPatch{Enabled: view.Enabled, Tasks: view.Tasks, Exchange: view.Exchange, Calendar: view.Calendar, ErrorOnly: view.ErrorOnly, Revision: view.Revision}
 	for _, c := range view.Channels {
 		p.Channels = append(p.Channels, PushChannelPatch{PushChannel: c.PushChannel})
 	}

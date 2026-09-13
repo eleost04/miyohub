@@ -18,6 +18,7 @@ type PushSettings struct {
 	Enabled   bool              `json:"enable"`
 	Tasks     bool              `json:"tasks"`
 	Exchange  bool              `json:"exchange"`
+	Calendar  bool              `json:"calendar"`
 	ErrorOnly bool              `json:"error_only"`
 	Revision  int               `json:"revision"`
 	Channels  []PushChannelView `json:"channels"`
@@ -30,6 +31,7 @@ type PushSettingsPatch struct {
 	Enabled   bool               `json:"enable"`
 	Tasks     bool               `json:"tasks"`
 	Exchange  bool               `json:"exchange"`
+	Calendar  bool               `json:"calendar"`
 	ErrorOnly bool               `json:"error_only"`
 	Revision  int                `json:"revision"`
 	Channels  []PushChannelPatch `json:"channels"`
@@ -196,7 +198,7 @@ func (s *Store) PushSettings(userID string) PushSettings {
 }
 func (s *Store) pushSettingsLocked(userID string) PushSettings {
 	p := s.pushConfigLocked(userID)
-	result := PushSettings{Enabled: p.Enabled, Tasks: p.Tasks, Exchange: p.Exchange, ErrorOnly: p.ErrorOnly, Revision: p.Revision, Channels: []PushChannelView{}}
+	result := PushSettings{Enabled: p.Enabled, Tasks: p.Tasks, Exchange: p.Exchange, Calendar: p.Calendar, ErrorOnly: p.ErrorOnly, Revision: p.Revision, Channels: []PushChannelView{}}
 	for _, c := range p.Channels {
 		view := PushChannelView{PushChannel: c, Configured: []string{}}
 		for key, value := range notify.SecretFields(&view.PushChannel) {
@@ -224,7 +226,7 @@ func (s *Store) UpdatePushSettings(userID string, p PushSettingsPatch) (PushSett
 	if len(p.Channels) > 10 {
 		return PushSettings{}, errors.New("最多配置 10 个推送渠道")
 	}
-	next := model.PushConfig{Enabled: p.Enabled, Tasks: p.Tasks, Exchange: p.Exchange, ErrorOnly: p.ErrorOnly, Revision: p.Revision + 1, Channels: []model.PushChannel{}}
+	next := model.PushConfig{Enabled: p.Enabled, Tasks: p.Tasks, Exchange: p.Exchange, Calendar: p.Calendar, ErrorOnly: p.ErrorOnly, Revision: p.Revision + 1, Channels: []model.PushChannel{}}
 	seen := map[string]bool{}
 	for _, patch := range p.Channels {
 		c := patch.PushChannel

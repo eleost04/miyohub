@@ -102,7 +102,42 @@ Adjust key deployment options in `.env`:
 
 ---
 
+## Development preview: account groups and batch actions
+
+The current development snapshot is `0.2.0-beta.2` on `feat/account-workspace`, pending [PR #8](https://github.com/eleost04/miyohub/pull/8) into `develop`. Compared with beta.1, it only fixes the oversized logo on loading and authentication screens. The fix and the four features below are included in the manually published Docker Hub preview `eleost/miyohub:0.2.0-beta.2`, which has passed deployment checks.
+
+This manual preview image supports `linux/amd64` only and does not replace `latest`. The latest GitHub release tag remains `v0.1.0-beta.3`; these new features have not merged into `main` or `develop`. Isolated tests and deployment checks do not establish live upstream compatibility or delivery to real devices; see the [roadmap](ROADMAP.md) for limits.
+
+This snapshot adds **Dashboard → Accounts → Groups and batch actions**. Filter your own accounts by group and update up to 50 accounts in one transaction: group, automatic check-in, individual schedule, or enabled state. Changing a schedule only affects future scheduling; it neither starts a run nor changes selected games. Individual settings can still be adjusted afterwards. **Run selected accounts** is an explicit action and retains the existing queue and request pacing.
+
+Group labels are local to each site user; an empty label removes membership. Missing, unauthorized, or stale account settings reject the entire batch without partial writes.
+
+## Development preview: encrypted account migration
+
+**Profile → Account migration** transfers your own accounts, groups and task settings between trusted deployments (up to 100 accounts). Export requires your current site password and a separate transfer passphrase of at least 12 characters. Files use PBKDF2-SHA256 (600,000 iterations) and AES-256-GCM. Keep the passphrase separate from the file and import only into a trusted HTTPS instance.
+
+Import shows a five-minute preview before explicit confirmation. Existing UIDs or duplicate names are skipped, never overwritten. New accounts are disabled with automatic tasks turned off until reviewed. Site permissions, sessions, logs, solver/push secrets and redemption plans are excluded. Export does not stop the original deployment: disable its corresponding tasks before switching to avoid duplicate work. This is file migration, not ongoing synchronization; it is not included in the published `0.1.0-beta.3`.
+
+## Development preview: game notes
+
+**Game notes** (under **More** on mobile) reads official stamina, daily progress and expedition data for Genshin Impact, Honkai: Star Rail and Zenless Zone Zero on demand. It does not perform in-game actions. Choose one of your accounts and games, then select a role verified against that account's upstream role list. Integer numbers and numeric strings are normalized; missing numbers and boolean states remain unknown rather than zero or complete. Recovery times are estimates based on the snapshot time.
+
+Notes are cached for 3 minutes and roles for 15 minutes. Requests for an account are serialized with a minimum 3-second gap. Opening a page, global status polling and hidden tabs never poll upstream notes. Verification responses pause that account's record queries for 6 hours in the current process, including after game or credential changes; rate limits respect `Retry-After`. Stale snapshots are labeled explicitly. Queries reuse the configured outbound proxy and existing device identity, without automatic device registration, credential renewal or CAPTCHA solving. Enable records/notes and complete verification in the official client. These safeguards reduce request pressure, but cannot guarantee freedom from upstream restrictions. This feature is not included in published `0.1.0-beta.3`.
+
+## Development preview: event and version calendar
+
+**Event calendar** reads published Genshin Impact and Honkai: Star Rail banners, limited-time events and challenges on demand. Results are cached for 30 minutes and share account-level cooldowns with notes. Seconds and milliseconds are parsed explicitly; missing start dates or completion states are not guessed, and malformed items are reported as omitted. The official ZZZ activity endpoint is not integrated yet.
+
+All three games support owner-local custom schedules for announced version updates and similar dates. The selected timezone is explicit; the server validates ordering and a one-year date range, with at most 100 custom items per user. Custom items are labeled as user-entered, never presented as official data or silently updated. Deleting an account removes its calendar entries. This feature is not included in published `0.1.0-beta.3`.
+
+### Calendar reminders
+
+Choose **Set reminder** on an event, then select its start/end and an on-time, 10-minute, 30-minute, 1-hour or 1-day lead. Scheduling consumes a fresh official snapshot or your own stored custom event without another upstream request. If dates change, cancel and reschedule explicitly. Delivery requires both automatic push and **Calendar reminders**, plus an enabled personal channel; calendar delivery is off by default. **Errors only** filters task/redemption results, not explicit calendar subscriptions.
+
+The backend checks local reminders every 30 seconds (up to 50 per batch). Subscription consumption and encrypted outbox entries are committed atomically, preventing repeat enqueue after restart. Uncertain sends are not replayed. Reminders expire 15 minutes after the planned reminder time or 5 minutes after the event target, whichever comes first, rather than sending an overdue batch. User/account/channel eligibility is checked again at dispatch. Up to 200 personal reminders are retained, with explicit terminal-history cleanup. Submitted notifications cannot be recalled; provider acceptance does not prove device delivery. Migration files exclude calendars and reminders.
+
 ## 🤝 Contributing
+
 
 Contributions, issues, and feature requests are welcome!
 Please check the [Contributing Guidelines (CONTRIBUTING.md)](CONTRIBUTING.md) before submitting pull requests.

@@ -9,7 +9,7 @@ export interface LoginState { running: boolean; status: string; qr_url: string; 
 export interface SMSChallenge { id: string; version?: 3 | 4; gt: string; challenge?: string; risk_type?: string; session_id?: string; new_captcha: boolean; expires_at: string; operation: 'send' | 'verify' }
 export type SMSCaptchaSolution = { id: string } & ({ challenge: string; validate: string } | { captcha_id: string; lot_number: string; captcha_output: string; pass_token: string; gen_time: string })
 export interface SMSState { status: 'idle' | 'sending' | 'captcha_required' | 'sent' | 'verifying' | 'verified' | 'failed'; message: string; phone: string; retry_at: string; expires_at: string; challenge?: SMSChallenge }
-export interface Account { id: string; name: string; user_id: string; stuid: string; disabled: boolean; status: string; checked_at: string; has_cookie: boolean; has_stoken: boolean; cloud_configured: string[]; task_results: Record<string, TaskSummary>; last_task_at: string; task_settings: AccountTaskSettings; exchange_allowed: boolean }
+export interface Account { id: string; name: string; group?: string; user_id: string; stuid: string; disabled: boolean; status: string; checked_at: string; has_cookie: boolean; has_stoken: boolean; cloud_configured: string[]; task_results: Record<string, TaskSummary>; last_task_at: string; task_settings: AccountTaskSettings; exchange_allowed: boolean }
 export interface AccountTaskSettings { revision: number; automatic: boolean; schedule?: { time: string; timezone: string } | null; features: Config['features']; games: Config['games']; cloud_games: Config['cloud_games']; bbs: Config['bbs'] }
 export interface ExchangePlan { state: string; phase?: string; attempt: number; revision: number; price: number; goods_type: number; id: string; enable: boolean; auto: boolean; account_id: string; goods_id: string; goods_name: string; device_fp: string; uid: string; region: string; game_biz: string; address_id: string; exchange_at: number; last_result: string; last_run: string }
 export interface CaptchaChannel {
@@ -77,7 +77,7 @@ export interface PushChannel {
   binding_error?: string
   configured: PushSecretKey[]
 }
-export interface PushSettings { enable: boolean; tasks: boolean; exchange: boolean; error_only: boolean; revision: number; channels: PushChannel[] }
+export interface PushSettings { enable: boolean; tasks: boolean; exchange: boolean; calendar: boolean; error_only: boolean; revision: number; channels: PushChannel[] }
 export interface PushResult { channel_id: string; name: string; provider: PushProvider; ok: boolean; error?: string; uncertain?: boolean }
 export interface PushTestResult { all_ok: boolean; results: PushResult[] }
 export interface PushBindingState { session_id: string; provider: PushProvider; channel_id: string; revision: number; running: boolean; status: string; qr_image: string; qr_url: string; message: string; expires_at: string }

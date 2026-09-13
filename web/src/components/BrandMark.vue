@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{ size?: number | string }>()
+withDefaults(defineProps<{ size?: number | string }>(), { size: 34 })
 </script>
 
 <template>

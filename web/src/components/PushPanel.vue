@@ -45,7 +45,8 @@ const removing = computed(() => draft.value?.channels.find(channel => channel.ui
 const options = [
   { key: 'tasks', icon: 'check', title: '签到结果', description: '游戏、云游戏与米游币，按账号汇总' },
   { key: 'exchange', icon: 'gift', title: '兑换结果', description: '成功、失败、停止与结果待确认' },
-  { key: 'error_only', icon: 'filter', title: '仅提醒异常', description: '不发送正常完成的自动通知' },
+  { key: 'calendar', icon: 'clock', title: '日历提醒', description: '仅发送你在活动日历中明确安排的提醒' },
+  { key: 'error_only', icon: 'filter', title: '仅提醒异常', description: '只过滤签到与兑换结果，不影响日历提醒' },
 ] as const
 const deliveryLabels: Record<string, string> = { pending: '等待发送', sending: '发送中', accepted: '服务已接收', failed: '发送失败', unknown: '发送结果待确认', skipped: '已跳过' }
 const bindingLabels: Record<string, string> = { ready: '通知会话已就绪', waiting_message: '请先在微信发送一条消息', expired: '登录已过期，请重新扫码', reconnecting: '连接中断，正在重连' }
@@ -185,7 +186,7 @@ onUnmounted(() => { active = false; window.clearInterval(activityTimer); control
             <button type="button" class="quick-bind-card" :disabled="dirty || draft.channels.length >= 10" @click="openBinding('qqbot')"><span class="push-provider-mark" data-tone="blue"><ProviderIcon name="qqbot" /></span><span><strong>QQ 扫码绑定</strong><small>扫码创建或选择机器人</small></span><AppIcon name="scan" :size="21" /></button>
             <button type="button" class="quick-bind-card weixin-bind" :disabled="dirty || draft.channels.length >= 10" @click="openBinding('wechat_claw')"><span class="push-provider-mark" data-tone="sage"><ProviderIcon name="wechat_claw" /></span><span><strong>微信扫码绑定</strong><small>通过微信 iLink 连接</small></span><AppIcon name="scan" :size="21" /></button>
           </div>
-          <label class="push-master"><span><strong>自动发送任务结果</strong><small>按下方选项，发送你绑定的米游社账号的任务结果。关闭后仍可在站内查看。</small></span><span class="push-switch"><input v-model="draft.enable" type="checkbox" aria-label="启用自动推送" /><span aria-hidden="true"></span></span></label>
+          <label class="push-master"><span><strong>自动发送通知</strong><small>按下方选项，发送自己账号的任务结果与已安排的日历提醒。关闭后仍可在站内查看。</small></span><span class="push-switch"><input v-model="draft.enable" type="checkbox" aria-label="启用自动推送" /><span aria-hidden="true"></span></span></label>
           <div class="push-options"><label v-for="option in options" :key="option.key" class="push-option"><AppIcon :name="option.icon" :size="19" /><span><strong>{{ option.title }}</strong><small>{{ option.description }}</small></span><input v-model="draft[option.key]" type="checkbox" :aria-label="option.title" /></label></div>
           <div class="push-section-title"><h3>选择接收方式</h3><small>点击卡片配置 · 可同时启用</small></div>
           <div class="push-provider-grid" role="group" aria-label="选择推送渠道">

@@ -393,7 +393,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .push-switch input:checked + span { background: #8fa47b; border-color: #8fa47b; }
 .push-switch input:checked + span::before { transform: translateX(15px); }
 .push-switch:has(input:focus-visible) { outline: 2px solid #738367; outline-offset: 3px; }
-.push-options { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin-top: 12px; }
+.push-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin-top: 12px; }
 .push-option { display: flex; align-items: center; gap: 10px; padding: 15px 13px; border: 1px solid #eee8db; border-radius: 12px; background: #fcfaf5; cursor: pointer; }
 .push-option > .app-icon { color: #a3987e; }
 .push-option > span { min-width: 0; flex: 1; }

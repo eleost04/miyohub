@@ -55,6 +55,9 @@ func cookieFields(a *model.Account) error {
 var uidPattern = regexp.MustCompile(`^[0-9]{1,20}$`)
 
 func validateAccount(a model.Account) error {
+	if err := validateAccountGroup(a.Group); err != nil {
+		return err
+	}
 	if a.Stuid != "" && !uidPattern.MatchString(a.Stuid) {
 		return errors.New("UID 只能包含数字")
 	}
@@ -140,6 +143,7 @@ func (s *Store) addAccountLocked(a model.Account, userID string) error {
 		a.TaskResults = old.TaskResults
 		a.LastTaskAt = old.LastTaskAt
 		a.TaskSettings = old.TaskSettings
+		a.Group = old.Group
 	} else {
 		a.ID = randomID("acc_")
 		if a.TaskSettings == nil {
@@ -165,6 +169,7 @@ func (s *Store) addAccountLocked(a model.Account, userID string) error {
 type AccountPatch struct {
 	ID               string            `json:"id"`
 	Name             *string           `json:"name"`
+	Group            *string           `json:"group"`
 	Disabled         *bool             `json:"disabled"`
 	Cookie           string            `json:"cookie"`
 	Stoken           string            `json:"stoken"`
@@ -183,6 +188,9 @@ func (s *Store) UpdateAccount(user model.User, p AccountPatch) (model.Account, e
 		a := clone(old)
 		if p.Name != nil {
 			a.Name = strings.TrimSpace(*p.Name)
+		}
+		if p.Group != nil {
+			a.Group = strings.TrimSpace(*p.Group)
 		}
 		if p.Disabled != nil {
 			a.Disabled = *p.Disabled
@@ -255,6 +263,7 @@ func (s *Store) DeleteAccount(user model.User, id string) error {
 			}
 		}
 		s.data.Config.Shop.Plans = plans
+		s.removeCalendarLocked("", id)
 		return s.saveLocked()
 	}
 	return errors.New("账号不存在或无权访问")

@@ -14,13 +14,29 @@ import (
 
 const TaskEventKind = "task"
 const ExchangeEventKind = "exchange"
+const CalendarEventKind = "calendar"
 
 // Event contains display text only. Never put accounts, cookies or addresses in the queue.
 type Event struct {
 	Kind, UserID, AccountID string
+	ReferenceID             string
 	Title, Message          string
 	Success                 bool
 	revision                int
+}
+
+func CalendarEvent(cfg model.Config, account model.Account, reminder model.CalendarReminder) Event {
+	target := "开始"
+	if reminder.Target == "end" {
+		target = "结束"
+	}
+	game := map[string]string{"genshin": "原神", "starrail": "崩坏：星穹铁道", "zzz": "绝区零"}[reminder.Game]
+	source := "米游社活动快照"
+	if reminder.Source == "manual" {
+		source = "自行录入日程"
+	}
+	message := fmt.Sprintf("账号：%s\n%s · %s\n%s：%s\n来源：%s", sanitize(account.Name, cfg, account), game, sanitize(reminder.Title, cfg, account), target, reportTime(cfg, reminder.TargetAt), source)
+	return Event{Kind: CalendarEventKind, UserID: account.UserID, AccountID: account.ID, ReferenceID: reminder.ID, Title: "MiyoHub · 日历提醒", Message: message, Success: true}
 }
 
 func TaskEvent(cfg model.Config, account model.Account, results map[string]model.TaskSummary, cancelled bool, at time.Time, stopReason ...string) Event {
