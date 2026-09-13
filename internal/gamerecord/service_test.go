@@ -2,6 +2,7 @@ package gamerecord
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -72,6 +73,45 @@ func TestRecordCacheCooldownAndIdentityIsolation(t *testing.T) {
 	got, err = s.Note(context.Background(), other, "genshin", "", "")
 	if err != nil || got.Status != "ok" || got.Cached || calls.Load() != 5 {
 		t.Fatal("independent owner affected by cache")
+	}
+}
+
+func TestCalendarReminderRequiresFreshOwnedSnapshot(t *testing.T) {
+	now := time.Now()
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		if r.URL.Path == mihoyo.AccountRolesPath {
+			_, _ = w.Write([]byte(`{"retcode":0,"data":{"list":[{"game_uid":"70101","region":"cn_gf01"}]}}`))
+			return
+		}
+		_, _ = fmt.Fprintf(w, `{"retcode":0,"data":{"act_list":[{"name":"fixture","time_info":{"start_ts":%d,"end_ts":%d}}]}}`, time.Now().Unix()+3600, time.Now().Unix()+86400)
+	}))
+	defer server.Close()
+	s := New(mihoyo.NewClient(server.URL))
+	defer s.Stop()
+	s.interval = 0
+	s.now = func() time.Time { return now }
+	a := model.Account{ID: "fixture", UserID: "owner", Cookie: "synthetic"}
+	snapshot, err := s.Calendar(context.Background(), a, "genshin", "", "")
+	if err != nil || snapshot.Calendar == nil || len(snapshot.Calendar.Events) != 1 {
+		t.Fatal("fixture calendar failed", err)
+	}
+	id := snapshot.Calendar.Events[0].ID
+	if _, _, err := s.CalendarEvent(a, "genshin", id); err != nil || calls.Load() != 2 {
+		t.Fatal("snapshot lookup queried upstream", err)
+	}
+	other := a
+	other.UserID = "other"
+	if _, _, err := s.CalendarEvent(other, "genshin", id); err == nil {
+		t.Fatal("snapshot crossed owner")
+	}
+	if _, _, err := s.CalendarEvent(a, "zzz", id); err == nil {
+		t.Fatal("snapshot crossed game")
+	}
+	now = now.Add(31 * time.Minute)
+	if _, _, err := s.CalendarEvent(a, "genshin", id); err == nil || calls.Load() != 2 {
+		t.Fatal("expired snapshot accepted or fetched automatically")
 	}
 }
 

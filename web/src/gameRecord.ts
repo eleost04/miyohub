@@ -11,3 +11,5 @@ export const roleKey = (role: RecordRole) => role.uid + ':' + role.region
 export type CalendarEvent = { id: string; title: string; kind: string; source: 'official' | 'manual'; start_at: string | null; end_at: string | null; finished: boolean | null }
 export const calendarKinds = [{ value: 'version', label: '版本更新' }, { value: 'pool', label: '卡池' }, { value: 'activity', label: '限时活动' }, { value: 'challenge', label: '挑战' }]
 export const calendarKindName = (kind: string) => calendarKinds.find(k => k.value === kind)?.label || '日程'
+export type CalendarReminder = { id: string; event_id: string; title: string; target: 'start' | 'end'; target_at: string; remind_at: string; status: string; detail?: string }
+export type CalendarReminderState = { reminders: CalendarReminder[]; enabled: boolean; channel_count: number }

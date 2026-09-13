@@ -60,12 +60,22 @@ func (s *Store) DeleteCalendarEvent(userID, id string) error {
 			continue
 		}
 		s.data.CalendarEvents = slices.Delete(s.data.CalendarEvents, i, i+1)
+		for j, r := range s.data.CalendarReminders {
+			if r.UserID == userID && r.EventID == id && (r.Status == "pending" || r.Status == "queued") {
+				s.data.CalendarReminders[j].Status = "cancelled"
+				s.data.CalendarReminders[j].Detail = "日程已删除"
+				s.data.CalendarReminders[j].UpdatedAt = time.Now()
+			}
+		}
 		return s.saveLocked()
 	}
 	return errors.New("日程不存在或无权访问")
 }
 
 func (s *Store) removeCalendarLocked(userID, accountID string) {
+	s.data.CalendarReminders = slices.DeleteFunc(s.data.CalendarReminders, func(r model.CalendarReminder) bool {
+		return (userID != "" && r.UserID == userID) || (accountID != "" && r.AccountID == accountID)
+	})
 	s.data.CalendarEvents = slices.DeleteFunc(s.data.CalendarEvents, func(e model.CustomCalendarEvent) bool {
 		return (userID != "" && e.UserID == userID) || (accountID != "" && e.AccountID == accountID)
 	})

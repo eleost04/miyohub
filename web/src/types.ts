@@ -77,7 +77,7 @@ export interface PushChannel {
   binding_error?: string
   configured: PushSecretKey[]
 }
-export interface PushSettings { enable: boolean; tasks: boolean; exchange: boolean; error_only: boolean; revision: number; channels: PushChannel[] }
+export interface PushSettings { enable: boolean; tasks: boolean; exchange: boolean; calendar: boolean; error_only: boolean; revision: number; channels: PushChannel[] }
 export interface PushResult { channel_id: string; name: string; provider: PushProvider; ok: boolean; error?: string; uncertain?: boolean }
 export interface PushTestResult { all_ok: boolean; results: PushResult[] }
 export interface PushBindingState { session_id: string; provider: PushProvider; channel_id: string; revision: number; running: boolean; status: string; qr_image: string; qr_url: string; message: string; expires_at: string }

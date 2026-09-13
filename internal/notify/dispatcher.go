@@ -15,6 +15,7 @@ type Outbox interface {
 	RecoverPushDeliveries() error
 	AddLogForUser(string, string, string) error
 }
+type calendarOutbox interface{ QueueDueCalendarReminders(time.Time) (bool, error) }
 
 // The encrypted outbox survives restarts. Ambiguous in-flight deliveries are
 // never replayed automatically, because a provider may already have accepted them.
@@ -43,6 +44,10 @@ func (d *Dispatcher) Start() error {
 		return err
 	}
 	d.started = true
+	if calendar, ok := d.store.(calendarOutbox); ok {
+		d.wg.Add(1)
+		go d.calendarWork(calendar)
+	}
 	for i := 0; i < 2; i++ {
 		d.wg.Add(1)
 		go d.work()
@@ -70,6 +75,30 @@ func (d *Dispatcher) Enqueue(event Event) bool {
 	return true
 }
 func (d *Dispatcher) Stop() { d.mu.Lock(); d.stopped = true; d.cancel(); d.mu.Unlock(); d.wg.Wait() }
+func (d *Dispatcher) calendarWork(calendar calendarOutbox) {
+	defer d.wg.Done()
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	warned := false
+	for d.ctx.Err() == nil {
+		queued, err := calendar.QueueDueCalendarReminders(time.Now())
+		if err != nil && !warned {
+			_ = d.store.AddLogForUser("", "scheduler", "日历提醒暂未入队，请检查存储或队列状态；稍后重试")
+		}
+		warned = err != nil
+		if queued {
+			select {
+			case d.wake <- struct{}{}:
+			default:
+			}
+		}
+		select {
+		case <-d.ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
 func (d *Dispatcher) work() {
 	defer d.wg.Done()
 	for d.ctx.Err() == nil {

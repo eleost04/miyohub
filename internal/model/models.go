@@ -5,18 +5,19 @@ import "time"
 const DefaultTimezone = "Asia/Shanghai"
 
 type State struct {
-	Config           Config                       `json:"config"`
-	Users            []User                       `json:"users"`
-	Sessions         map[string]Session           `json:"sessions"`
-	Logs             []LogEntry                   `json:"logs"`
-	InviteCodes      []InviteCode                 `json:"invite_codes"`
-	RegistrationMode string                       `json:"registration_mode"`
-	UserPush         map[string]PushConfig        `json:"user_push"`
-	UserCaptcha      map[string]UserCaptchaConfig `json:"user_captcha"`
-	CaptchaActivity  map[string][]CaptchaAttempt  `json:"captcha_activity,omitempty"`
-	CaptchaProbes    map[string]CaptchaProbe      `json:"captcha_probes,omitempty"`
-	PushDeliveries   []PushDelivery               `json:"push_deliveries"`
-	CalendarEvents   []CustomCalendarEvent        `json:"calendar_events,omitempty"`
+	Config            Config                       `json:"config"`
+	Users             []User                       `json:"users"`
+	Sessions          map[string]Session           `json:"sessions"`
+	Logs              []LogEntry                   `json:"logs"`
+	InviteCodes       []InviteCode                 `json:"invite_codes"`
+	RegistrationMode  string                       `json:"registration_mode"`
+	UserPush          map[string]PushConfig        `json:"user_push"`
+	UserCaptcha       map[string]UserCaptchaConfig `json:"user_captcha"`
+	CaptchaActivity   map[string][]CaptchaAttempt  `json:"captcha_activity,omitempty"`
+	CaptchaProbes     map[string]CaptchaProbe      `json:"captcha_probes,omitempty"`
+	PushDeliveries    []PushDelivery               `json:"push_deliveries"`
+	CalendarEvents    []CustomCalendarEvent        `json:"calendar_events,omitempty"`
+	CalendarReminders []CalendarReminder           `json:"calendar_reminders,omitempty"`
 }
 
 type Config struct {
@@ -201,6 +202,7 @@ type PushConfig struct {
 	Enabled   bool          `json:"enable"`
 	Tasks     bool          `json:"tasks"`
 	Exchange  bool          `json:"exchange"`
+	Calendar  bool          `json:"calendar"`
 	Revision  int           `json:"revision"`
 	ErrorOnly bool          `json:"error_only"`
 	Channels  []PushChannel `json:"channels"`
@@ -248,6 +250,7 @@ type PushDelivery struct {
 	ChannelName string    `json:"channel_name"`
 	Provider    string    `json:"provider"`
 	Kind        string    `json:"kind"`
+	ReferenceID string    `json:"reference_id,omitempty"`
 	Revision    int       `json:"revision"`
 	Title       string    `json:"title"`
 	Message     string    `json:"message"`

@@ -126,6 +126,12 @@ Notes are cached for 3 minutes and roles for 15 minutes. Requests for an account
 
 All three games support owner-local custom schedules for announced version updates and similar dates. The selected timezone is explicit; the server validates ordering and a one-year date range, with at most 100 custom items per user. Custom items are labeled as user-entered, never presented as official data or silently updated. Deleting an account removes its calendar entries. This feature is not included in published `0.1.0-beta.3`.
 
+### Calendar reminders
+
+Choose **Set reminder** on an event, then select its start/end and an on-time, 10-minute, 30-minute, 1-hour or 1-day lead. Scheduling consumes a fresh official snapshot or your own stored custom event without another upstream request. If dates change, cancel and reschedule explicitly. Delivery requires both automatic push and **Calendar reminders**, plus an enabled personal channel; calendar delivery is off by default. **Errors only** filters task/redemption results, not explicit calendar subscriptions.
+
+The backend checks local reminders every 30 seconds (up to 50 per batch). Subscription consumption and encrypted outbox entries are committed atomically, preventing repeat enqueue after restart. Uncertain sends are not replayed. Reminders expire 15 minutes after the planned reminder time or 5 minutes after the event target, whichever comes first, rather than sending an overdue batch. User/account/channel eligibility is checked again at dispatch. Up to 200 personal reminders are retained, with explicit terminal-history cleanup. Submitted notifications cannot be recalled; provider acceptance does not prove device delivery. Migration files exclude calendars and reminders.
+
 ## 🤝 Contributing
 
 

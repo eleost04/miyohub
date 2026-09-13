@@ -251,7 +251,7 @@ onUnmounted(() => { disposeHistory(); window.removeEventListener('miyohub:unauth
       <PushPanel v-else-if="view === 'notifications'" ref="pushPanel" :timezone="timezone" />
       <CaptchaPanel v-else-if="view === 'captcha'" ref="captchaPanel" :user="user" />
       <GameNotesPanel v-else-if="view === 'notes' && config" :accounts="config.accounts" :timezone="timezone" />
-      <CalendarPanel v-else-if="view === 'calendar' && config" :accounts="config.accounts" :timezone="timezone" />
+      <CalendarPanel v-else-if="view === 'calendar' && config" :accounts="config.accounts" :timezone="timezone" @navigate="navigate" />
       <ActivityPanel v-else-if="view === 'logs'" :logs="status.logs" :running="status.running" :timezone="timezone" />
       <SettingsPanel v-else-if="view === 'settings' && config && user.role === 'admin'" ref="settingsPanel" :config="config" :admin="true" @saved="safeRefresh" @navigate="navigate" />
       <ProfilePanel v-else-if="view === 'profile'" :user="user" @guide="openGuide" @changed="safeRefresh" />

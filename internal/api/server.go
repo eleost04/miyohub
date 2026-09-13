@@ -143,6 +143,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/game-record/note", s.withAuth(s.gameNote))
 	mux.HandleFunc("/api/v1/game-record/calendar", s.withAuth(s.gameCalendar))
 	mux.HandleFunc("/api/v1/calendar/custom", s.withAuth(s.customCalendar))
+	mux.HandleFunc("/api/v1/calendar/reminders", s.withAuth(s.calendarReminders))
+	mux.HandleFunc("/api/v1/calendar/reminders/history", s.withAuth(s.calendarReminderHistory))
 	mux.HandleFunc("/api/v1/captcha/config", s.withAuth(s.captchaConfig))
 	mux.HandleFunc("/api/v1/captcha/test", s.withAuth(s.captchaTest))
 	mux.HandleFunc("/api/v1/push/test", s.withAuth(s.pushTest))

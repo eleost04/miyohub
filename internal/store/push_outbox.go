@@ -24,14 +24,37 @@ func (s *Store) pushAllowedLocked(userID, accountID string) bool {
 	return false
 }
 func pushEventEnabled(config model.PushConfig, kind string, success bool) bool {
+	if kind == notify.CalendarEventKind {
+		return config.Enabled && config.Calendar
+	}
 	return config.Enabled && (!config.ErrorOnly || !success) && (kind == notify.TaskEventKind && config.Tasks || kind == notify.ExchangeEventKind && config.Exchange)
 }
 func (s *Store) QueuePushEvent(event notify.Event) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	queued, err := s.queuePushEventLocked(event)
+	if err != nil || !queued {
+		return queued, err
+	}
+	return true, s.saveLocked()
+}
+
+// Caller owns the transaction; calendar subscription consumption and outbox
+// append must be persisted together, or neither may take effect after restart.
+func (s *Store) queuePushEventLocked(event notify.Event) (bool, error) {
 	cfg := s.pushConfigLocked(event.UserID)
 	if !s.pushAllowedLocked(event.UserID, event.AccountID) || !pushEventEnabled(cfg, event.Kind, event.Success) {
 		return false, nil
+	}
+	if event.Kind == notify.CalendarEventKind && !s.calendarReferenceLocked(event.UserID, event.AccountID, event.ReferenceID) {
+		return false, nil
+	}
+	if event.Kind == notify.CalendarEventKind {
+		for _, entry := range s.data.PushDeliveries {
+			if entry.ReferenceID == event.ReferenceID {
+				return false, nil
+			}
+		}
 	}
 	channels := []model.PushChannel{}
 	for _, c := range cfg.Channels {
@@ -53,10 +76,10 @@ func (s *Store) QueuePushEvent(event notify.Event) (bool, error) {
 	}
 	now := time.Now()
 	for _, c := range channels {
-		s.data.PushDeliveries = append(s.data.PushDeliveries, model.PushDelivery{ID: randomID("delivery_"), UserID: event.UserID, AccountID: event.AccountID, ChannelID: c.ID, ChannelName: c.Name, Provider: c.Provider, Kind: event.Kind, Revision: cfg.Revision, Title: event.Title, Message: event.Message, Success: event.Success, Status: "pending", CreatedAt: now, UpdatedAt: now})
+		s.data.PushDeliveries = append(s.data.PushDeliveries, model.PushDelivery{ID: randomID("delivery_"), UserID: event.UserID, AccountID: event.AccountID, ChannelID: c.ID, ChannelName: c.Name, Provider: c.Provider, Kind: event.Kind, ReferenceID: event.ReferenceID, Revision: cfg.Revision, Title: event.Title, Message: event.Message, Success: event.Success, Status: "pending", CreatedAt: now, UpdatedAt: now})
 	}
 	s.trimPushLocked()
-	return true, s.saveLocked()
+	return true, nil
 }
 func (s *Store) trimPushLocked() {
 	if len(s.data.PushDeliveries) <= 500 {
@@ -83,6 +106,9 @@ func (s *Store) ClaimPushDelivery() (model.PushDelivery, model.PushChannel, bool
 		}
 		cfg := s.pushConfigLocked(entry.UserID)
 		valid := s.pushAllowedLocked(entry.UserID, entry.AccountID) && cfg.Revision == entry.Revision && pushEventEnabled(cfg, entry.Kind, entry.Success)
+		if entry.Kind == notify.CalendarEventKind {
+			valid = valid && s.calendarDeliveryAllowedLocked(entry, time.Now())
+		}
 		var selected model.PushChannel
 		for _, c := range cfg.Channels {
 			if c.ID == entry.ChannelID && c.Enabled {
@@ -93,6 +119,7 @@ func (s *Store) ClaimPushDelivery() (model.PushDelivery, model.PushChannel, bool
 			s.data.PushDeliveries[i].Status = "skipped"
 			s.data.PushDeliveries[i].Error = "配置、账号或用户状态已变化，未发送"
 			s.data.PushDeliveries[i].UpdatedAt = time.Now()
+			s.finishCalendarReminderLocked(s.data.PushDeliveries[i], time.Now())
 			changed = true
 			continue
 		}
@@ -129,6 +156,7 @@ func (s *Store) FinishPushDelivery(id string, result notify.Result) error {
 			s.data.PushDeliveries[i].Error = result.Error
 			s.data.PushDeliveries[i].UpdatedAt = time.Now()
 			userID = entry.UserID
+			s.finishCalendarReminderLocked(s.data.PushDeliveries[i], time.Now())
 			message = notify.ProviderName(entry.Provider) + "：" + message
 			break
 		}
@@ -149,6 +177,7 @@ func (s *Store) RecoverPushDeliveries() error {
 			s.data.PushDeliveries[i].Status = "unknown"
 			s.data.PushDeliveries[i].Error = "服务中断，送达状态未确认；为避免重复消息，未自动重发"
 			s.data.PushDeliveries[i].UpdatedAt = time.Now()
+			s.finishCalendarReminderLocked(s.data.PushDeliveries[i], time.Now())
 			changed = true
 		}
 	}
