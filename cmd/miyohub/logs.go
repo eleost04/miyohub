@@ -28,7 +28,7 @@ func inspectBBS(ctx context.Context, s *store.Store, o cliOptions, output io.Wri
 	if !ok {
 		return errors.New("账号或所属用户已停用")
 	}
-	data, err := (tasks.BBSCheckin{Client: mihoyo.NewClient(""), Config: cfg, Account: accounts[0]}).InspectState(ctx)
+	data, err := (tasks.BBSCheckin{Client: mihoyo.NewClient("", s.NetworkConfig), Config: cfg, Account: accounts[0]}).InspectState(ctx)
 	if err != nil {
 		return err
 	}

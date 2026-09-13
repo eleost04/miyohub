@@ -144,9 +144,9 @@ func (s *Store) ClaimExchangePlanAt(userID string, admin bool, id string, schedu
 			if !p.Auto || p.ExchangeAt <= 0 || p.ExchangeAt > now.Add(lead).Unix() {
 				return fail("计划未到执行时间")
 			}
-			if now.Unix()-p.ExchangeAt > 60 {
+			if !now.Before(time.Unix(p.ExchangeAt, 0).Add(s.data.Config.Shop.DispatchWindow())) {
 				p.State = "missed"
-				p.LastResult = "已错过兑换时间，请重新创建计划"
+				p.LastResult = "已到达兑换窗口截止时间，请重新创建计划"
 				s.data.Config.Shop.Plans[i] = p
 				if err := s.saveLocked(); err != nil {
 					return model.ExchangePlan{}, model.Account{}, err
@@ -176,7 +176,7 @@ func (s *Store) ExchangeProgress(id, key string, attempt int, message string) er
 }
 func (s *Store) FinishExchange(id, key, state string, attempt int, message string) error {
 	switch state {
-	case "success", "failed", "unknown", "cancelled", "pending":
+	case "success", "failed", "unknown", "cancelled", "pending", "missed":
 	default:
 		return errors.New("无效执行状态")
 	}

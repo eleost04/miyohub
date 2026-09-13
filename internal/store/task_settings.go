@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"time"
 
@@ -101,6 +102,9 @@ func (s *Store) UpdateAccountTasks(user model.User, id string, p model.AccountTa
 		}
 		if err := validateTaskSettings(p); err != nil {
 			return model.Account{}, err
+		}
+		if p.SameWork(a.TaskSettings) && p.Automatic == a.TaskSettings.Automatic && reflect.DeepEqual(p.Schedule, a.TaskSettings.Schedule) {
+			return clone(a), nil
 		}
 		p.Revision++
 		p = clone(p)

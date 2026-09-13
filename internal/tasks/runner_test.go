@@ -171,4 +171,18 @@ func TestRunnerRenewsCookieAndPersistsDetailedFailure(t *testing.T) {
 	if r.Running() || len(r.ProgressForUser(u)) != 0 {
 		t.Fatal("completed task left a stale reservation")
 	}
+	runs, count := map[string]bool{}, 0
+	for _, entry := range s.LogsForUser(u.ID, false) {
+		if entry.Component != "task" && entry.Component != "games" {
+			continue
+		}
+		if entry.AccountID != account.ID || entry.RunID == "" {
+			t.Fatal("task process and summary cannot be correlated")
+		}
+		runs[entry.RunID] = true
+		count++
+	}
+	if len(runs) != 1 || count < 3 {
+		t.Fatal("a run did not keep one stable identifier", count)
+	}
 }

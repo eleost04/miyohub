@@ -18,6 +18,7 @@ type PushSettings struct {
 	Enabled   bool              `json:"enable"`
 	Tasks     bool              `json:"tasks"`
 	Exchange  bool              `json:"exchange"`
+	Calendar  bool              `json:"calendar"`
 	ErrorOnly bool              `json:"error_only"`
 	Revision  int               `json:"revision"`
 	Channels  []PushChannelView `json:"channels"`
@@ -30,6 +31,7 @@ type PushSettingsPatch struct {
 	Enabled   bool               `json:"enable"`
 	Tasks     bool               `json:"tasks"`
 	Exchange  bool               `json:"exchange"`
+	Calendar  bool               `json:"calendar"`
 	ErrorOnly bool               `json:"error_only"`
 	Revision  int                `json:"revision"`
 	Channels  []PushChannelPatch `json:"channels"`
@@ -196,7 +198,7 @@ func (s *Store) PushSettings(userID string) PushSettings {
 }
 func (s *Store) pushSettingsLocked(userID string) PushSettings {
 	p := s.pushConfigLocked(userID)
-	result := PushSettings{Enabled: p.Enabled, Tasks: p.Tasks, Exchange: p.Exchange, ErrorOnly: p.ErrorOnly, Revision: p.Revision, Channels: []PushChannelView{}}
+	result := PushSettings{Enabled: p.Enabled, Tasks: p.Tasks, Exchange: p.Exchange, Calendar: p.Calendar, ErrorOnly: p.ErrorOnly, Revision: p.Revision, Channels: []PushChannelView{}}
 	for _, c := range p.Channels {
 		view := PushChannelView{PushChannel: c, Configured: []string{}}
 		for key, value := range notify.SecretFields(&view.PushChannel) {
@@ -224,7 +226,7 @@ func (s *Store) UpdatePushSettings(userID string, p PushSettingsPatch) (PushSett
 	if len(p.Channels) > 10 {
 		return PushSettings{}, errors.New("最多配置 10 个推送渠道")
 	}
-	next := model.PushConfig{Enabled: p.Enabled, Tasks: p.Tasks, Exchange: p.Exchange, ErrorOnly: p.ErrorOnly, Revision: p.Revision + 1, Channels: []model.PushChannel{}}
+	next := model.PushConfig{Enabled: p.Enabled, Tasks: p.Tasks, Exchange: p.Exchange, Calendar: p.Calendar, ErrorOnly: p.ErrorOnly, Revision: p.Revision + 1, Channels: []model.PushChannel{}}
 	seen := map[string]bool{}
 	for _, patch := range p.Channels {
 		c := patch.PushChannel
@@ -247,12 +249,21 @@ func (s *Store) UpdatePushSettings(userID string, p PushSettingsPatch) (PushSett
 			}
 			c.ContextToken, c.SyncCursor, c.BindingState = old.ContextToken, old.SyncCursor, old.BindingState
 			c.BindingError = old.BindingError
-			if c.OpenID != old.OpenID || c.BotID != old.BotID || c.Mode != old.Mode || c.Token != "" && c.Token != old.Token || c.APIURL != "" && c.APIURL != old.APIURL {
+			connectionChanged := c.OpenID != old.OpenID || c.BotID != old.BotID || c.Mode != old.Mode || c.Token != "" && c.Token != old.Token || c.APIURL != "" && c.APIURL != old.APIURL
+			if c.Provider == "qqbot" {
+				// A QQ gateway belongs to the bot credentials, not the message
+				// recipient. Editing OpenID must not erase a live READY state.
+				connectionChanged = c.AppID != old.AppID || c.ClientSecret != "" && c.ClientSecret != old.ClientSecret
+			}
+			if connectionChanged {
 				c.ContextToken, c.SyncCursor, c.BindingState, c.BindingError = "", "", "", ""
 			}
 			previous := notify.SecretFields(old)
 			for key, value := range notify.SecretFields(&c) {
 				if key == "context_token" || key == "sync_cursor" {
+					continue
+				}
+				if key == "client_secret" && c.AppID != old.AppID {
 					continue
 				}
 				if *value == "" {
@@ -264,6 +275,23 @@ func (s *Store) UpdatePushSettings(userID string, p PushSettingsPatch) (PushSett
 			return PushSettings{}, errors.New("推送渠道重复")
 		}
 		seen[c.ID] = true
+		if c.Provider == "qqbot" && c.AppID != "" {
+			for otherUser, config := range s.data.UserPush {
+				if otherUser == userID {
+					continue
+				}
+				for _, other := range config.Channels {
+					if other.Provider == "qqbot" && other.AppID == c.AppID {
+						return PushSettings{}, errors.New("此 QQ 机器人已绑定到其他渠道，请使用独立机器人")
+					}
+				}
+			}
+			for _, other := range next.Channels {
+				if other.Provider == "qqbot" && other.AppID == c.AppID {
+					return PushSettings{}, errors.New("同一个 QQ 机器人不能重复添加到多个渠道")
+				}
+			}
+		}
 		secrets := notify.SecretFields(&c)
 		for _, key := range patch.ClearFields {
 			if key == "context_token" || key == "sync_cursor" {
@@ -274,6 +302,9 @@ func (s *Store) UpdatePushSettings(userID string, p PushSettingsPatch) (PushSett
 				return PushSettings{}, errors.New("不能清除未知的密钥字段")
 			}
 			*value = ""
+			if key == "client_secret" || key == "token" {
+				c.ContextToken, c.SyncCursor, c.BindingState, c.BindingError = "", "", "", ""
+			}
 		}
 		if err := notify.ValidateChannel(c, c.Enabled); err != nil {
 			return PushSettings{}, err

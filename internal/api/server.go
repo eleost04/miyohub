@@ -12,6 +12,7 @@ import (
 
 	"github.com/eleost04/miyohub/internal/auth"
 	"github.com/eleost04/miyohub/internal/buildinfo"
+	"github.com/eleost04/miyohub/internal/gamerecord"
 	"github.com/eleost04/miyohub/internal/mihoyo"
 	"github.com/eleost04/miyohub/internal/model"
 	"github.com/eleost04/miyohub/internal/notify"
@@ -36,7 +37,10 @@ type Server struct {
 	push         *notify.Dispatcher
 	pushBindings *notify.Bindings
 	weixin       *notify.WeixinMonitor
+	qqbot        *notify.QQMonitor
 	probes       captchaProbes
+	archives     archiveSessions
+	records      *gamerecord.Service
 }
 
 func NewServer(s *store.Store) *Server { return NewServerWithOptions(s, Options{}) }
@@ -44,13 +48,16 @@ func NewServerWithOptions(s *store.Store, options Options) *Server {
 	if options.Version == "" {
 		options.Version = buildinfo.Version()
 	}
-	server := &Server{options: options, store: s, runner: tasks.NewRunner(s), qr: auth.NewQRManager(s), sms: auth.NewSMSManager(s), shopClient: mihoyo.NewClient("")}
+	server := &Server{options: options, store: s, runner: tasks.NewRunner(s), qr: auth.NewQRManager(s), sms: auth.NewSMSManager(s), shopClient: mihoyo.NewClient("", s.NetworkConfig)}
 	server.exchange = shop.NewEngine(s, server.shopClient)
+	server.records = gamerecord.New(mihoyo.NewClient("", s.NetworkConfig))
 	sender := notify.Sender{HTTP: notify.NewHTTPClient()}
 	server.pushSender = sender
 	server.push = notify.NewDispatcher(s, sender)
 	server.pushBindings = notify.NewBindings(s, sender)
 	server.weixin = notify.NewWeixinMonitor(s, sender)
+	server.qqbot = notify.NewQQMonitor(s, sender)
+	server.pushBindings.OnBound = server.qqbot.Wake
 	server.runner.Notify = server.push.Enqueue
 	server.exchange.Notify = server.push.Enqueue
 	server.scheduler = scheduler.New(s.Config().Schedule, func(ctx context.Context) error {
@@ -81,11 +88,14 @@ func (s *Server) Start() error {
 		return err
 	}
 	s.weixin.Start()
+	s.qqbot.Start()
 	s.exchange.Start()
 	return nil
 }
 
 func (s *Server) Stop() {
+	s.records.Stop()
+	s.archives.clear()
 	s.personal.Stop()
 	s.probes.stop()
 	s.runner.Stop()
@@ -94,6 +104,7 @@ func (s *Server) Stop() {
 	s.scheduler.Stop()
 	s.exchange.Stop()
 	s.pushBindings.Stop()
+	s.qqbot.Stop()
 	s.weixin.Stop()
 	s.push.Stop()
 }
@@ -110,6 +121,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/auth/password", s.withAuth(s.changePassword))
 	mux.HandleFunc("/api/v1/auth/me", s.withAuth(s.me))
 	mux.HandleFunc("/api/v1/profile/onboarding", s.withAuth(s.onboarding))
+	mux.HandleFunc("/api/v1/profile/archive/export", s.withAuth(s.archiveExport))
+	mux.HandleFunc("/api/v1/profile/archive/preview", s.withAuth(s.archivePreview))
+	mux.HandleFunc("/api/v1/profile/archive/import", s.withAuth(s.archiveImport))
 	mux.HandleFunc("/api/v1/admin/users", s.withAuth(s.adminUsers))
 	mux.HandleFunc("/api/v1/admin/users/status", s.withAuth(s.adminUserStatus))
 	mux.HandleFunc("/api/v1/admin/users/role", s.withAuth(s.adminUserRole))
@@ -125,6 +139,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/accounts", s.withAuth(s.accounts))
 	mux.HandleFunc("/api/v1/accounts/check", s.withAuth(s.accountCheck))
 	mux.HandleFunc("/api/v1/accounts/tasks", s.withAuth(s.accountTasks))
+	mux.HandleFunc("/api/v1/accounts/batch", s.withAuth(s.accountBatch))
+	mux.HandleFunc("/api/v1/game-record/note", s.withAuth(s.gameNote))
+	mux.HandleFunc("/api/v1/game-record/calendar", s.withAuth(s.gameCalendar))
+	mux.HandleFunc("/api/v1/calendar/custom", s.withAuth(s.customCalendar))
+	mux.HandleFunc("/api/v1/calendar/reminders", s.withAuth(s.calendarReminders))
+	mux.HandleFunc("/api/v1/calendar/reminders/history", s.withAuth(s.calendarReminderHistory))
 	mux.HandleFunc("/api/v1/captcha/config", s.withAuth(s.captchaConfig))
 	mux.HandleFunc("/api/v1/captcha/test", s.withAuth(s.captchaTest))
 	mux.HandleFunc("/api/v1/push/test", s.withAuth(s.pushTest))
@@ -567,7 +587,7 @@ func (s *Server) config(w http.ResponseWriter, r *http.Request, user model.User)
 		cfg := s.store.Config()
 		if !cfg.Enabled {
 			for _, a := range cfg.Accounts {
-				s.runner.CancelAccount(a.ID)
+				s.runner.CancelAccount(a.ID, "管理员已关闭站点任务服务")
 			}
 		}
 		if !cfg.Shop.Enabled {
@@ -593,6 +613,7 @@ func publicConfig(config model.Config) model.Config {
 	}
 
 	config.Device = model.Device{}
+	config.Network = store.PublicNetwork(config.Network)
 	config.Push.Channels = []model.PushChannel{}
 	config.Captcha.Channels = append([]model.CaptchaChannel{}, config.Captcha.Channels...)
 	for index := range config.Captcha.Channels {
@@ -613,6 +634,7 @@ func publicConfigForUser(config model.Config, user model.User) model.Config {
 	config = publicConfig(config)
 	if user.Role != "admin" {
 		config.Captcha = model.CaptchaConfig{Channels: []model.CaptchaChannel{}}
+		config.Network.Proxy = model.ProxyConfig{}
 	}
 	// Legacy global exclusions are not personal rules and may contain another
 	// user's role UIDs. Account-scoped preferences are exposed on each account.

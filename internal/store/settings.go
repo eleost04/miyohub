@@ -25,6 +25,7 @@ type SettingsPatch struct {
 	Enabled  *bool                `json:"enabled"`
 	Captcha  *model.CaptchaConfig `json:"captcha"`
 	Schedule *model.Schedule      `json:"schedule"`
+	Network  *model.NetworkConfig `json:"network"`
 	Shop     *struct {
 		Enabled       bool    `json:"enable"`
 		RetrySeconds  float64 `json:"retry_seconds"`
@@ -44,6 +45,15 @@ func (s *Store) UpdateSettings(p SettingsPatch) error {
 	}
 	if p.Schedule != nil {
 		next.Schedule = *p.Schedule
+	}
+	if p.Network != nil {
+		next.Network = clone(*p.Network)
+	}
+	if retries := next.Network.BBSStateRetries; retries != nil && (*retries < 0 || *retries > 10) {
+		return errors.New("米游币状态查询重试次数应在 0–10 之间")
+	}
+	if err := validateNetwork(&next.Network, s.data.Config.Network); err != nil {
+		return err
 	}
 	if p.Shop != nil {
 		next.Shop.Enabled = p.Shop.Enabled

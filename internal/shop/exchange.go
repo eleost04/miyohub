@@ -2,6 +2,7 @@ package shop
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -22,6 +23,9 @@ type Service struct {
 	Emit    func(string)
 	// AcquireExchange serializes actual requests, not preparation or retry waits.
 	AcquireExchange func(context.Context) (release func(), err error)
+	// Set only by scheduled execution. Manual execution uses its own start time.
+	clock       *serverClock
+	scheduledAt time.Time
 }
 
 func (s Service) Goods(ctx context.Context, game string) (map[string]any, error) {
@@ -58,7 +62,17 @@ func (s Service) Goods(ctx context.Context, game string) (map[string]any, error)
 				continue
 			}
 			seen[id] = true
-			goods = append(goods, normalizeGood(item))
+			good := normalizeGood(item)
+			if text(item["status"], "") == "not_in_sell" && !boolValue(good["sold_out"]) && intValue(item["next_time"]) > 0 && intValue(item["sale_start_time"]) <= 0 {
+				// The list can contain next week's restock but omit today's
+				// opening. MiyoQian enriches these items with detail requests.
+				// Keep our first catalog load small: mark it uncertain and
+				// use the existing fresh-detail request before creating a plan.
+				good["time_needs_detail"] = true
+				good["exchange_timestamp"] = 0
+				good["exchange_time"] = "开放时间待详情确认"
+			}
+			goods = append(goods, good)
 			added++
 		}
 		if added == 0 || len(items) < 20 || data["has_more"] == false {
@@ -138,7 +152,7 @@ func (s Service) Exchange(ctx context.Context, plan model.ExchangePlan) (map[str
 func (s Service) Points(ctx context.Context) (map[string]any, error) {
 	query := url.Values{"app_id": {"1"}, "point_sn": {"myb"}}
 	var result map[string]any
-	if err := s.Client.JSON(ctx, http.MethodGet, mihoyo.TakumiAPI+mihoyo.MallPointPath, query, nil, s.accountHeaders("api-takumi.mihoyo.com", "https://webstatic.miyoushe.com"), &result); err != nil {
+	if err := s.Client.JSON(ctx, http.MethodGet, mihoyo.TakumiAPI+mihoyo.MallPointPath, query, nil, s.accountHeaders("api-takumi.mihoyo.com", "https://webstatic.mihoyo.com"), &result); err != nil {
 		return nil, err
 	}
 	if retcode(result) != 0 {
@@ -176,7 +190,7 @@ func (s Service) Roles(ctx context.Context, gameBiz string) ([]map[string]string
 	}
 	query := url.Values{"game_biz": {gameBiz}}
 	var result map[string]any
-	if err := s.Client.JSON(ctx, http.MethodGet, mihoyo.TakumiAPI+mihoyo.AccountRolesPath, query, nil, s.accountHeaders("api-takumi.mihoyo.com", "https://webstatic.miyoushe.com"), &result); err != nil {
+	if err := s.Client.JSON(ctx, http.MethodGet, mihoyo.TakumiAPI+mihoyo.AccountRolesPath, query, nil, s.accountHeaders("api-takumi.mihoyo.com", "https://webstatic.mihoyo.com"), &result); err != nil {
 		return nil, err
 	}
 	if retcode(result) != 0 {
@@ -197,7 +211,20 @@ func (s Service) Roles(ctx context.Context, gameBiz string) ([]map[string]string
 }
 
 func (s Service) DeviceFP(ctx context.Context) (string, error) {
-	body := map[string]any{"seed_id": mihoyo.DeviceFP()[:8], "device_id": strings.ToLower(s.device().ID), "platform": "5", "seed_time": strconv.FormatInt(time.Now().UnixMilli(), 10), "app_name": "account_cn", "device_fp": mihoyo.DeviceFP()}
+	// Keep the platform-5 shop profile separate from app login fingerprints.
+	// MiyoQian's exchange flow supplies this web environment as a JSON string.
+	fields, err := json.Marshal(map[string]any{
+		"userAgent": mihoyo.DefaultMobileUA, "browserScreenSize": 243750, "maxTouchPoints": 5,
+		"isTouchSupported": true, "browserLanguage": "zh-CN", "browserPlat": "iPhone",
+		"browserTimeZone": "Asia/Shanghai", "webGlRender": "Apple GPU", "webGlVendor": "Apple Inc.",
+		"numOfPlugins": 0, "listOfPlugins": "unknown", "screenRatio": 3, "deviceMemory": "unknown",
+		"hardwareConcurrency": "4", "cpuClass": "unknown", "ifNotTrack": "unknown", "ifAdBlock": 0,
+		"hasLiedResolution": 1, "hasLiedOs": 0, "hasLiedBrowser": 0,
+	})
+	if err != nil {
+		return "", errors.New("无法生成兑换设备环境")
+	}
+	body := map[string]any{"seed_id": mihoyo.DeviceFP()[:8], "device_id": strings.ToLower(s.device().ID), "platform": "5", "seed_time": strconv.FormatInt(time.Now().UnixMilli(), 10), "app_name": "account_cn", "device_fp": mihoyo.DeviceFP(), "ext_fields": string(fields)}
 	var result map[string]any
 	if err := s.Client.JSON(ctx, http.MethodPost, mihoyo.DeviceFPURL, nil, body, http.Header{"User-Agent": {mihoyo.DefaultMobileUA}}, &result); err != nil {
 		return "", err
@@ -213,15 +240,15 @@ func (s Service) DeviceFP(ctx context.Context) (string, error) {
 }
 
 func (s Service) goodsHeaders() http.Header {
-	return http.Header{"Accept": {"application/json, text/plain, */*"}, "Origin": {"https://user.mihoyo.com"}, "Referer": {"https://user.mihoyo.com/"}, "User-Agent": {mihoyo.DefaultMobileUA}, "x-rpc-device_id": {s.device().ID}, "x-rpc-client_type": {"5"}, "Cookie": {s.Account.Cookie}}
+	return http.Header{"Accept": {"application/json, text/plain, */*"}, "Accept-Language": {"zh-CN,zh-Hans;q=0.9"}, "Origin": {"https://user.mihoyo.com"}, "Referer": {"https://user.mihoyo.com/"}, "User-Agent": {mihoyo.DefaultMobileUA}, "X-Rpc-Device_id": {s.device().ID}, "X-Rpc-Client_type": {"5"}, "Cookie": {s.Account.Cookie}}
 }
 
 func (s Service) exchangeHeaders(plan model.ExchangePlan) http.Header {
-	return http.Header{"Accept": {"application/json, text/plain, */*"}, "Content-Type": {"application/json;charset=utf-8"}, "Origin": {"https://webstatic.miyoushe.com"}, "Referer": {"https://webstatic.miyoushe.com/"}, "User-Agent": {mihoyo.DefaultMobileUA}, "x-rpc-app_version": {"2.106.2"}, "x-rpc-channel": {"appstore"}, "x-rpc-client_type": {"1"}, "x-rpc-verify_key": {"bll8iq97cem8"}, "x-rpc-device_fp": {plan.DeviceFP}, "x-rpc-device_id": {s.device().ID}, "x-rpc-device_model": {s.device().Model}, "x-rpc-device_name": {s.device().Name}, "Cookie": {s.Account.Cookie}}
+	return http.Header{"Accept": {"application/json, text/plain, */*"}, "Accept-Language": {"zh-CN,zh-Hans;q=0.9"}, "Content-Type": {"application/json;charset=utf-8"}, "Origin": {"https://webstatic.miyoushe.com"}, "Referer": {"https://webstatic.miyoushe.com/"}, "User-Agent": {mihoyo.DefaultMobileUA}, "X-Rpc-App_version": {"2.106.2"}, "X-Rpc-Channel": {"appstore"}, "X-Rpc-Client_type": {"1"}, "X-Rpc-Verify_key": {"bll8iq97cem8"}, "X-Rpc-Device_fp": {plan.DeviceFP}, "X-Rpc-Device_id": {s.device().ID}, "X-Rpc-Device_model": {s.device().Model}, "X-Rpc-Device_name": {s.device().Name}, "X-Rpc-Sys_version": {"12"}, "Cookie": {s.Account.Cookie}}
 }
 
 func (s Service) accountHeaders(host, origin string) http.Header {
-	return http.Header{"Accept": {"application/json, text/plain, */*"}, "Origin": {origin}, "Referer": {origin + "/"}, "User-Agent": {mihoyo.DefaultMobileUA}, "x-rpc-device_id": {s.device().ID}, "x-rpc-client_type": {"5"}, "Cookie": {s.Account.Cookie}}
+	return http.Header{"Accept": {"application/json, text/plain, */*"}, "Accept-Language": {"zh-CN,zh-Hans;q=0.9"}, "Origin": {origin}, "Referer": {origin + "/"}, "User-Agent": {mihoyo.DefaultMobileUA}, "X-Rpc-Device_id": {s.device().ID}, "X-Rpc-Client_type": {"5"}, "Cookie": {s.Account.Cookie}}
 }
 
 func retcode(value map[string]any) int {
@@ -278,7 +305,8 @@ func normalizeGood(raw map[string]any) map[string]any {
 	unlimit := boolValue(raw["unlimit"])
 	total := intValue(raw["total"])
 	nextNum := intValue(raw["next_num"])
-	soldOut := !unlimit && ((raw["total"] != nil && total <= 0) || (raw["total"] == nil && nextNum <= 0))
+	totalKnown := text(raw["total"], "") != ""
+	soldOut := !unlimit && (totalKnown && total <= 0 || !totalKnown && nextNum <= 0)
 	nextTime := intValue(raw["next_time"])
 	saleStart := intValue(raw["sale_start_time"])
 	now := intValue(raw["now_time"])
@@ -288,7 +316,7 @@ func normalizeGood(raw map[string]any) map[string]any {
 	exchangeAt := 0
 	if soldOut {
 		exchangeAt = nextTime
-	} else if status != "online" && saleStart > now {
+	} else if saleStart > now && (nextTime <= 0 || saleStart <= nextTime) {
 		exchangeAt = saleStart
 	} else if status != "online" {
 		exchangeAt = nextTime
@@ -298,6 +326,8 @@ func normalizeGood(raw map[string]any) map[string]any {
 		displayStatus = "sold_out_with_next"
 	} else if soldOut {
 		displayStatus = "ended"
+	} else if exchangeAt > now {
+		displayStatus = "scheduled"
 	} else if unlimit {
 		displayStatus = "always"
 	} else if status == "online" {
@@ -308,7 +338,7 @@ func normalizeGood(raw map[string]any) map[string]any {
 	stock := "未知"
 	if unlimit {
 		stock = "不限"
-	} else if raw["total"] != nil {
+	} else if totalKnown {
 		stock = strconv.Itoa(total)
 	} else if raw["next_num"] != nil {
 		stock = strconv.Itoa(nextNum)

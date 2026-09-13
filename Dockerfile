@@ -1,4 +1,4 @@
-FROM node:22-alpine AS frontend
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
@@ -6,15 +6,17 @@ COPY web/ ./
 COPY internal/buildinfo/VERSION /src/internal/buildinfo/VERSION
 RUN npm run build
 
-FROM golang:1.27-alpine AS backend
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS backend
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd/ cmd/
 COPY internal/ internal/
 ARG VERSION
+ARG TARGETOS
+ARG TARGETARCH
 RUN test -z "$VERSION" || test "$VERSION" = "$(tr -d '\r\n' < internal/buildinfo/VERSION)"
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/miyohub ./cmd/miyohub
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -trimpath -ldflags="-s -w" -o /out/miyohub ./cmd/miyohub
 
 FROM alpine:3.22
 RUN apk add --no-cache ca-certificates tzdata \
@@ -25,6 +27,7 @@ RUN apk add --no-cache ca-certificates tzdata \
 WORKDIR /app
 COPY --from=backend /out/miyohub /usr/local/bin/miyohub
 COPY --from=frontend /src/web/dist/ /app/web/dist/
+COPY THIRD_PARTY_NOTICES.md /app/THIRD_PARTY_NOTICES.md
 ENV MIYOHUB_DATA_DIR=/data MIYOHUB_HOST=0.0.0.0 MIYOHUB_PORT=5890
 USER miyohub
 VOLUME ["/data"]

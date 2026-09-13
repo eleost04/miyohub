@@ -38,7 +38,7 @@ type qrSession struct {
 }
 
 func NewQRManager(s *store.Store) *QRManager {
-	return &QRManager{store: s, client: mihoyo.NewClient(""), sessions: map[string]*qrSession{}}
+	return &QRManager{store: s, client: mihoyo.NewClient("", s.NetworkConfig), sessions: map[string]*qrSession{}}
 }
 func (m *QRManager) State(userID string) model.LoginState {
 	m.mu.RLock()

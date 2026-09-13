@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { expect, test } from './api-test.mjs'
 import { dismissGuide } from './ui.mjs'
 
-test('短信人机验证在隔离页面手动完成，未发送不显示成功且不加载首屏第三方脚本', async ({ browser }, testInfo) => {
+for (const version of [3, 4]) test(`短信 Geetest ${version} 在隔离页面手动完成，未发送不显示成功且不加载首屏第三方脚本`, async ({ browser }, testInfo) => {
   const origin = 'http://127.0.0.1:5897', headers = { 'Content-Type': 'application/json', 'X-MiyoHub-Request': '1' }
   const context = await browser.newContext({ viewport: { width: 320, height: 780 } })
   const errors = [], unexpected = []
@@ -12,17 +12,20 @@ test('短信人机验证在隔离页面手动完成，未发送不显示成功�
     const auth = await context.request.post(origin + (status.data.has_admin ? '/api/v1/auth/login' : '/api/v1/auth/setup'), { headers, data: { username: 'smoke-admin', password: 'local-test-only-123' } })
     assert(auth.ok())
     await dismissGuide(context)
-    const state = { status: 'captcha_required', message: '请先完成人机验证，短信尚未发送。', phone: '138****8000', retry_at: new Date(Date.now() + 60000).toISOString(), expires_at: new Date(Date.now() + 600000).toISOString(), challenge: { id: 'manual-id', gt: 'public-gt', challenge: 'public-challenge', new_captcha: true, operation: 'send', expires_at: new Date(Date.now() + 120000).toISOString() } }
+    const widgetProof = version === 4 ? { captcha_id: 'public-gt', lot_number: 'fixture-lot', captcha_output: 'fixture_output+/==', pass_token: 'fixture-pass', gen_time: 1700000000 } : { geetest_challenge: 'public-challenge', geetest_validate: 'manual-validation' }
+    const expectedAnswer = version === 4 ? { id: 'manual-id', ...widgetProof, gen_time: '1700000000' } : { id: 'manual-id', challenge: 'public-challenge', validate: 'manual-validation' }
+    const scriptURL = version === 4 ? 'https://static.geetest.com/v4/gt4.js' : 'https://static.geetest.com/static/tools/gt.js'
+    const state = { status: 'captcha_required', message: '请先完成人机验证，短信尚未发送。', phone: '138****8000', retry_at: new Date(Date.now() + 60000).toISOString(), expires_at: new Date(Date.now() + 600000).toISOString(), challenge: { id: 'manual-id', version, gt: 'public-gt', ...(version === 4 ? { risk_type: 'slide', session_id: 'public-risk-session' } : { challenge: 'public-challenge' }), new_captcha: true, operation: 'send', expires_at: new Date(Date.now() + 120000).toISOString() } }
     await context.route('**/*', async route => {
       const url = new URL(route.request().url())
-      if (url.href === 'https://static.geetest.com/static/tools/gt.js') {
+      if (url.href === scriptURL) {
         scripts++
-        return route.fulfill({ contentType: 'application/javascript', body: `window.initGeetest = (options, callback) => { let success; const widget = { appendTo(selector) { const button = document.createElement('button'); button.textContent = '完成模拟验证'; button.onclick = () => success(); document.querySelector(selector).append(button) }, onReady(fn) { fn() }, onError() {}, onSuccess(fn) { success = fn }, getValidate() { return { geetest_challenge: options.challenge, geetest_validate: 'manual-validation' } } }; callback(widget) }` })
+        return route.fulfill({ contentType: 'application/javascript', body: `window.${version === 4 ? 'initGeetest4' : 'initGeetest'} = (options, callback) => { ${version === 4 ? `if (options.captchaId !== 'public-gt' || options.riskType !== 'slide' || JSON.parse(options.userInfo).session_id !== 'public-risk-session') throw new Error('V4 public challenge context missing');` : ''} let success; const widget = { appendTo(selector) { const button = document.createElement('button'); button.textContent = '完成模拟验证'; button.onclick = () => success(); document.querySelector(selector).append(button) }, onReady(fn) { fn() }, onError() {}, onSuccess(fn) { success = fn }, getValidate() { return ${JSON.stringify(widgetProof)} } }; callback(widget) }` })
       }
       if (url.origin !== origin) { unexpected.push(url.origin); return route.abort() }
       const ok = data => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, data }) })
       if (url.pathname === '/api/v1/login/sms/send') { sends++; assert.equal(route.request().postDataJSON().captcha_mode, 'manual'); return ok(state) }
-      if (url.pathname === '/api/v1/login/sms/captcha') { answers++; assert.deepEqual(route.request().postDataJSON(), { id: 'manual-id', challenge: 'public-challenge', validate: 'manual-validation' }); return ok({ ...state, status: 'sent', challenge: undefined, message: '短信验证码已发送至 138****8000' }) }
+      if (url.pathname === '/api/v1/login/sms/captcha') { answers++; assert.deepEqual(route.request().postDataJSON(), expectedAnswer); return ok({ ...state, status: 'sent', challenge: undefined, message: '短信验证码已发送至 138****8000' }) }
       if (url.pathname === '/api/v1/login/sms/verify') { verifies++; return ok({ status: 'verified' }) }
       if (url.pathname === '/api/v1/login/sms/cancel') return ok({})
       if (/^\/api\/v1\/(run|shop\/|push\/test|captcha\/test)/.test(url.pathname)) { unexpected.push(url.pathname); return route.abort() }
@@ -48,7 +51,8 @@ test('短信人机验证在隔离页面手动完成，未发送不显示成功�
     await expect(human).toBeHidden()
     await expect(login.getByText('短信验证码已发送至 138****8000', { exact: true })).toBeVisible()
     await login.getByPlaceholder('输入验证码').fill('123456')
-    await page.screenshot({ path: testInfo.outputPath('sms-manual-320.png'), fullPage: true })
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
+    await page.screenshot({ path: testInfo.outputPath(`sms-v${version}-manual-320.png`), fullPage: true })
     await login.getByRole('button', { name: '验证并绑定账号', exact: true }).click()
     await expect(login).toBeHidden()
     assert.deepEqual([scripts, sends, answers, verifies], [1, 1, 1, 1])

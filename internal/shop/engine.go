@@ -119,9 +119,10 @@ func (e *Engine) execute(ctx context.Context, p model.ExchangePlan, a model.Acco
 	}
 	httpClient.Transport = permissionTransport{base: base, allowed: allowed}
 	client.HTTP = &httpClient
-	service := Service{Client: &client, Config: e.store.Config(), Account: a, AcquireExchange: e.requestGate(a.ID)}
+	service := Service{Client: &client, Config: e.store.Config(), Account: a, AcquireExchange: e.requestGate(a.ID), clock: &e.clock}
 	service.Emit = func(message string) { _ = e.store.AddLogForUser(a.UserID, "exchange", p.GoodsName+": "+message) }
 	if scheduled {
+		service.scheduledAt = time.Unix(p.ExchangeAt, 0)
 		if err := e.clock.sync(ctx, e.client, p.GoodsID); err != nil {
 			_ = e.store.AddLogForUser(a.UserID, "exchange", p.GoodsName+": 米哈游校时未成功，将按当前可用时钟执行；可在兑换页面查看校时状态")
 		}
@@ -159,10 +160,6 @@ func (e *Engine) execute(ctx context.Context, p model.ExchangePlan, a model.Acco
 			state, message = "cancelled", "兑换已停止，未发送兑换请求"
 			return
 		}
-		if e.clock.Now().Unix()-p.ExchangeAt > 60 {
-			message = "已错过兑换时间，请重新创建计划"
-			return
-		}
 	}
 	if latest, ok := e.store.AccountRunnable(a.ID); ok && allowed() {
 		service.Account = latest
@@ -184,6 +181,8 @@ func (e *Engine) execute(ctx context.Context, p model.ExchangePlan, a model.Acco
 		message = err.Error()
 		if errors.Is(err, ErrUncertain) {
 			state = "unknown"
+		} else if errors.Is(err, ErrRetryWindowElapsed) && attempt == 0 {
+			state = "missed"
 		} else if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			state = "cancelled"
 			message = "已停止后续请求"

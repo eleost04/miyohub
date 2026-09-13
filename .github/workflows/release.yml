@@ -65,7 +65,7 @@ jobs:
             mkdir -p "$folder/web"
             CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -ldflags='-s -w' -o "$folder/miyohub" ./cmd/miyohub
             cp -R web/dist "$folder/web/dist"
-            cp README.md README.en.md "$folder/"
+            cp README.md README.en.md THIRD_PARTY_NOTICES.md "$folder/"
             tar -czf "$folder.tar.gz" -C "$folder" .
           done
           node scripts/release-notes.mjs "${RELEASE_TAG#v}" dist/RELEASE_NOTES.md

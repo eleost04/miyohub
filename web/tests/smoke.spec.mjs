@@ -121,6 +121,10 @@ async function mobileSettings(flow) {
 try {
   const desk = await setup()
   const { page } = desk
+  for (const [selector, size] of [['.sidebar .brand-symbol', 30], ['.app-footer .brand-symbol', 15]]) {
+    const box = await page.locator(selector).boundingBox()
+    assert.deepEqual({ width: box.width, height: box.height }, { width: size, height: size }, 'explicit brand size changed')
+  }
   assert(await page.locator('.hero-card').getByRole('heading', { name: '执行签到任务', exact: true }).isVisible())
   assert.equal(await page.locator('.hero-copy .eyebrow').count(), 0, 'promotional hero caption remained')
   assert(!/SMALL TASKS|把时间留给喜欢|让每一天，都从容/.test(await page.locator('body').innerText()))

@@ -6,10 +6,10 @@ export interface TaskSummary { success: number; failed: number; skipped: number;
 export interface TaskProgress { account_id: string; state: string; current: string; started_at: string }
 export interface TaskRunSelection { account_ids: string[]; games_only?: boolean; bbs_only?: boolean; games?: string[] }
 export interface LoginState { running: boolean; status: string; qr_url: string; error: string; account: string; account_id?: string }
-export interface SMSChallenge { id: string; gt: string; challenge: string; new_captcha: boolean; expires_at: string; operation: 'send' | 'verify' }
-export interface SMSCaptchaSolution { id: string; challenge: string; validate: string }
+export interface SMSChallenge { id: string; version?: 3 | 4; gt: string; challenge?: string; risk_type?: string; session_id?: string; new_captcha: boolean; expires_at: string; operation: 'send' | 'verify' }
+export type SMSCaptchaSolution = { id: string } & ({ challenge: string; validate: string } | { captcha_id: string; lot_number: string; captcha_output: string; pass_token: string; gen_time: string })
 export interface SMSState { status: 'idle' | 'sending' | 'captcha_required' | 'sent' | 'verifying' | 'verified' | 'failed'; message: string; phone: string; retry_at: string; expires_at: string; challenge?: SMSChallenge }
-export interface Account { id: string; name: string; user_id: string; stuid: string; disabled: boolean; status: string; checked_at: string; has_cookie: boolean; has_stoken: boolean; cloud_configured: string[]; task_results: Record<string, TaskSummary>; last_task_at: string; task_settings: AccountTaskSettings; exchange_allowed: boolean }
+export interface Account { id: string; name: string; group?: string; user_id: string; stuid: string; disabled: boolean; status: string; checked_at: string; has_cookie: boolean; has_stoken: boolean; cloud_configured: string[]; task_results: Record<string, TaskSummary>; last_task_at: string; task_settings: AccountTaskSettings; exchange_allowed: boolean }
 export interface AccountTaskSettings { revision: number; automatic: boolean; schedule?: { time: string; timezone: string } | null; features: Config['features']; games: Config['games']; cloud_games: Config['cloud_games']; bbs: Config['bbs'] }
 export interface ExchangePlan { state: string; phase?: string; attempt: number; revision: number; price: number; goods_type: number; id: string; enable: boolean; auto: boolean; account_id: string; goods_id: string; goods_name: string; device_fp: string; uid: string; region: string; game_biz: string; address_id: string; exchange_at: number; last_result: string; last_run: string }
 export interface CaptchaChannel {
@@ -19,19 +19,21 @@ export interface CaptchaChannel {
 export interface CaptchaAttempt { at: string; source: string; provider: string; channel_id: string; kind: string; ok: boolean; code: string; duration_ms: number }
 export interface CaptchaProbe { id: string; status: 'running' | 'succeeded' | 'failed' | 'interrupted'; started_at: string; finished_at?: string; retry_at: string; duration_ms: number; message: string }
 export interface CaptchaSettings { source: 'off' | 'personal' | 'site'; revision: number; max_retries: number; channels: CaptchaChannel[]; site_allowed: boolean; site_available: boolean; activity?: CaptchaAttempt[] }
+export interface ProxySettings { enable: boolean; url: string; username: string; password: string; has_password?: boolean; clear_password?: boolean }
 export interface Config {
   enabled: boolean
   accounts: Account[]
   features: { game_checkin: boolean; cloud_game_checkin: boolean; bbs_tasks: boolean }
   games: { enabled: string[]; black_list: Record<string, string[]> }
   cloud_games: { enabled: string[] }
-  bbs: { forums: number[]; checkin: boolean; read: boolean; like: boolean; share: boolean; cancel_like: boolean; post_limit: number; delay_seconds: number[] }
+  bbs: { run_all_selected?: boolean; forums: number[]; checkin: boolean; read: boolean; like: boolean; share: boolean; cancel_like: boolean; post_limit: number; delay_seconds: number[] }
+  network: { bbs_state_retries?: number; proxy: ProxySettings }
   schedule: { enable: boolean; time: string; timezone: string; jitter_minutes: number; run_on_start: boolean }
   push: { error_only: boolean; channels: Array<{ provider: string; enable: boolean }> }
   captcha: { max_retries: number; channels: CaptchaChannel[] }
   shop_exchange: { enable: boolean; retry_seconds: number; retry_interval: number; plans: ExchangePlan[] }
 }
-export interface LogEntry { at: string; component: string; message: string }
+export interface LogEntry { at: string; component: string; message: string; account_id?: string; run_id?: string }
 export interface SchedulerStatus {
   enabled: boolean
   running: boolean
@@ -56,6 +58,7 @@ export interface ShopGood {
   sold_out: boolean
   exchange_timestamp: number
   exchange_time: string
+  time_needs_detail?: boolean
   display_status: string
   limit: string
 }
@@ -74,8 +77,8 @@ export interface PushChannel {
   binding_error?: string
   configured: PushSecretKey[]
 }
-export interface PushSettings { enable: boolean; tasks: boolean; exchange: boolean; error_only: boolean; revision: number; channels: PushChannel[] }
+export interface PushSettings { enable: boolean; tasks: boolean; exchange: boolean; calendar: boolean; error_only: boolean; revision: number; channels: PushChannel[] }
 export interface PushResult { channel_id: string; name: string; provider: PushProvider; ok: boolean; error?: string; uncertain?: boolean }
 export interface PushTestResult { all_ok: boolean; results: PushResult[] }
-export interface PushBindingState { session_id: string; provider: PushProvider; channel_id: string; running: boolean; status: string; qr_image: string; qr_url: string; message: string; expires_at: string }
+export interface PushBindingState { session_id: string; provider: PushProvider; channel_id: string; revision: number; running: boolean; status: string; qr_image: string; qr_url: string; message: string; expires_at: string }
 export interface PushDelivery { id: string; channel_id: string; channel_name: string; provider: PushProvider; kind: string; title: string; status: string; error?: string; created_at: string; updated_at: string }

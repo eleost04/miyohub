@@ -1,8 +1,10 @@
+<p align="center"><img src="web/public/favicon.svg" width="80" height="80" alt="MiyoHub Logo"></p>
+
 # MiyoHub
 
 [Feature board](ROADMAP.md) · [Contributing and maintenance](CONTRIBUTING.md) · [Issues](https://github.com/eleost04/miyohub/issues) · [Security policy](.github/SECURITY.md)
 
-[简体中文](README.md) · Version **0.0.1**
+[简体中文](README.md) · Preview version **0.2.0-beta.2**
 
 Self-hosted MiYouShe check-ins, community coin tasks and merchandise exchange management, built with Go and Vue 3. This is not an official HoYoverse product. Upstream APIs, account challenges and stock can change; task rewards and successful exchanges are not guaranteed.
 
@@ -17,9 +19,9 @@ Self-hosted MiYouShe check-ins, community coin tasks and merchandise exchange ma
 
 A site user is the ownership boundary. Administrators cannot browse another user's game accounts, private logs or reservations in the task workspace. System settings and user administration are separate.
 
-## Stable and development branches
+## Version and branches
 
-This branch retains the `0.0.1` stable application while repository documentation and verification rules continue to improve. See the [develop guide](https://github.com/eleost04/miyohub/blob/develop/README.en.md), [roadmap](ROADMAP.md) and [Releases](https://github.com/eleost04/miyohub/releases) for Beta features, configuration changes and development images. Do not mix the stable configuration documented here with a Beta Compose file.
+At the maintainer's request, the verified `0.2.0-beta.2` snapshot is being promoted to the default `main` branch with its Beta designation intact. This does not create a stable Release. Development still uses topic branches and PRs into `develop`; stable tags require separate release acceptance. The latest GitHub release tag remains `v0.1.0-beta.3`. See the [roadmap](ROADMAP.md) for current preview images and scope.
 
 For development, use `git clone --branch develop https://github.com/eleost04/miyohub.git`. In an existing full clone, run `git fetch origin develop` followed by `git switch develop`, then create a `fix/<topic>` or `feat/<topic>` branch.
 
@@ -42,12 +44,15 @@ The container is named `miyohub`, the persistent volume is `miyohub_miyohub-data
 
 The optional [miyohub-captcha](https://github.com/eleost04/miyohub-captcha) companion provides a local CPU solver. The main application can run without it.
 
+The source checkout builds locally by default. To use a prebuilt image, back up first, set `MIYOHUB_IMAGE=eleost/miyohub:0.2.0-beta.2` in `.env`, then run `docker compose pull miyohub` and `docker compose up -d --no-build miyohub`. This preview image supports `linux/amd64` only; `latest` does not select these new features.
+
 ## Environment variables
 
 Compose reads the deployment variables below from the project's `.env`. Copy `.env.example`, edit it as needed and use restrictive permissions (`chmod 600 .env`). Commit only the example. The standalone program **does not load `.env` automatically**: use process environment variables or CLI flags.
 
 | Variable | Default | Purpose / caveat |
 | --- | --- | --- |
+| `MIYOHUB_IMAGE` | `miyohub:local` | Compose only: local build tag or an explicit prebuilt version/digest; start pulled images with `--no-build` |
 | `MIYOHUB_BIND_ADDR` | `127.0.0.1` | Compose only: host bind address; keep loopback behind a host reverse proxy |
 | `MIYOHUB_HTTP_PORT` | `5890` | Compose only: published host port, not the internal container port |
 | `MIYOHUB_PUBLIC_ORIGIN` | empty | Exact browser origin such as `https://miyohub.example.com`, without a path; scheme, host and port must match |
@@ -70,7 +75,7 @@ MIYOHUB_HOST=127.0.0.1 MIYOHUB_PORT=5890 MIYOHUB_DATA_DIR=./data \
   go run ./cmd/miyohub serve --web-dir ./web/dist
 ```
 
-Putting standalone-only variables in Compose's `.env` does not inject them into the container; the supplied Compose file passes only its declared deployment variables. Configure credentials, schedules, captcha and notification keys in the web UI. `MIYOHUB_ADMIN_PASSWORD` and Cookie environment-based account creation are not supported. Version `0.0.1` does not provide the web proxy settings or the `MIYOHUB_IMAGE` selector; use the target development version's documentation and Compose file for those capabilities.
+Putting standalone-only variables in Compose's `.env` does not inject them into the container; the supplied Compose file passes only its declared deployment variables. Configure credentials, schedules, captcha and notification keys in the web UI. `MIYOHUB_ADMIN_PASSWORD` and Cookie environment-based account creation are not supported. Administrators configure HTTP/SOCKS5 egress and state-query retries in the network settings. The application uses explicit project configuration, not implicit environment proxies, and does not silently fall back to a direct connection.
 
 ## HTTPS and Caddy
 
@@ -98,7 +103,7 @@ Onboarding can be skipped or closed and reopened from the profile. Bind an accou
 
 The site-wide task switch pauses all check-ins. Disabling only the fallback scheduler does not disable personal times. Personal schedules are checked every ten seconds; downtime is not caught up on restart. Automatic runs have durable per-account daily deduplication; manual runs remain possible. A displayed schedule is not a promise of exact-second execution.
 
-A network failure when reading coin-task state is retried at most twice, without replaying mutations. If the upstream reports zero remaining daily rewards, the run checks state without doing tasks again. Previously earned coins are not new rewards, and this situation does not imply a captcha configuration problem.
+Coin-state network failures default to five retries, configurable from zero to ten, with cancellation, backoff and Retry-After handling. Mutations are not replayed. The default reward-progress mode only checks state when no daily rewards remain. Account owners may explicitly choose selected-project mode to perform bounded enabled check-in/read/like/share actions independently of rewards; interactions are never silently enabled. New coins come from the post-run state check, not an existing balance.
 
 Administrators generate random invitation codes with independent exchange and site-captcha grants. New invitations default to one use, seven-day expiry, both grants enabled and site captcha selected; these presets are editable. Ordinary registration without an invitation does not receive those grants. Legacy invitations are not retroactively elevated. Expiry, revocation, concurrent redemption, usage limits and the creator's current administrator status are checked server-side.
 
@@ -130,7 +135,7 @@ Reservations prepare approximately 180 seconds ahead. Different products can pre
 
 A booked sale round is distinguished from a later restock advertised by the upstream. Genuine postponements, sold-out stock and newly created reservations are validated separately; plans are not silently moved to another week.
 
-Temporary explicit rejections may retry within the configured window: at most 60 requests, minimum 0.2-second interval, and at least two seconds of backoff for rate-limit responses. A zero window sends only once. Insufficient balance, purchase limits, stock exhaustion, expired authentication and invalid parameters stop the run. Timeouts, connection loss and malformed responses are **uncertain outcomes and are never automatically replayed**. Check MiYouShe exchange records first to avoid duplicate spending. Expiry prevents new attempts but allows an in-flight result to finish. Notifications contain the final summary; logs retain attempts and return codes.
+Explicit not-open-yet, temporary rejection or busy responses may retry within the reservation window, which is at most 120 seconds and anchored to the scheduled time rather than extended by preparation or queuing. The minimum interval is 0.2 seconds, with at least two seconds of backoff for rate-limit responses. A zero window sends only once. Insufficient balance, purchase limits, stock exhaustion, expired authentication and invalid parameters stop the run. Timeouts, connection loss and malformed responses are **uncertain outcomes and are never automatically replayed**. Check MiYouShe exchange records first to avoid duplicate spending. Expiry prevents new attempts but allows an in-flight result to finish. Notifications contain the final summary; logs retain attempts and return codes.
 
 ## Notifications and interaction
 
@@ -139,6 +144,36 @@ Every user controls automatic delivery, task/exchange categories, error-only fil
 “Accepted by the notification service” means the provider acknowledged the request, not that a device received or read it. Official QQ setup happens on the official QR page. After WeChat binding, send the bot a message to establish a session. Provider permissions, session expiry and quotas still apply.
 
 Preferences autosave about one second after editing stops, with a browser-local opt-out. Secrets are not stored in browser storage. Credentials, passwords, permissions, new channels and exchange plans require explicit confirmation. The mobile floating save action appears only for unsaved edits without another visible save action. Back closes selectors, dialogs and details before navigating away.
+
+## Account groups and batch actions
+
+The current version provides **Dashboard → Accounts → Groups and batch actions**. Filter your own accounts by group and update up to 50 accounts in one transaction: group, automatic check-in, individual schedule, or enabled state. Changing a schedule only affects future scheduling; it neither starts a run nor changes selected games. Individual settings can still be adjusted afterwards. **Run selected accounts** is an explicit action and retains the existing queue and request pacing.
+
+Group labels are local to each site user; an empty label removes membership. Missing, unauthorized, or stale account settings reject the entire batch without partial writes.
+
+## Encrypted account migration
+
+**Profile → Account migration** transfers your own accounts, groups and task settings between trusted deployments (up to 100 accounts). Export requires your current site password and a separate transfer passphrase of at least 12 characters. Files use PBKDF2-SHA256 (600,000 iterations) and AES-256-GCM. Keep the passphrase separate from the file and import only into a trusted HTTPS instance.
+
+Import shows a five-minute preview before explicit confirmation. Existing UIDs or duplicate names are skipped, never overwritten. New accounts are disabled with automatic tasks turned off until reviewed. Site permissions, sessions, logs, solver/push secrets and redemption plans are excluded. Export does not stop the original deployment: disable its corresponding tasks before switching to avoid duplicate work. This is file migration, not ongoing synchronization; it is not included in the published `0.1.0-beta.3`.
+
+## Game notes
+
+**Game notes** (under **More** on mobile) reads official stamina, daily progress and expedition data for Genshin Impact, Honkai: Star Rail and Zenless Zone Zero on demand. It does not perform in-game actions. Choose one of your accounts and games, then select a role verified against that account's upstream role list. Integer numbers and numeric strings are normalized; missing numbers and boolean states remain unknown rather than zero or complete. Recovery times are estimates based on the snapshot time.
+
+Notes are cached for 3 minutes and roles for 15 minutes. Requests for an account are serialized with a minimum 3-second gap. Opening a page, global status polling and hidden tabs never poll upstream notes. Verification responses pause that account's record queries for 6 hours in the current process, including after game or credential changes; rate limits respect `Retry-After`. Stale snapshots are labeled explicitly. Queries reuse the configured outbound proxy and existing device identity, without automatic device registration, credential renewal or CAPTCHA solving. Enable records/notes and complete verification in the official client. These safeguards reduce request pressure, but cannot guarantee freedom from upstream restrictions. This feature is not included in published `0.1.0-beta.3`.
+
+## Event and version calendar
+
+**Event calendar** reads published Genshin Impact and Honkai: Star Rail banners, limited-time events and challenges on demand. Results are cached for 30 minutes and share account-level cooldowns with notes. Seconds and milliseconds are parsed explicitly; missing start dates or completion states are not guessed, and malformed items are reported as omitted. The official ZZZ activity endpoint is not integrated yet.
+
+All three games support owner-local custom schedules for announced version updates and similar dates. The selected timezone is explicit; the server validates ordering and a one-year date range, with at most 100 custom items per user. Custom items are labeled as user-entered, never presented as official data or silently updated. Deleting an account removes its calendar entries. This feature is not included in published `0.1.0-beta.3`.
+
+### Calendar reminders
+
+Choose **Set reminder** on an event, then select its start/end and an on-time, 10-minute, 30-minute, 1-hour or 1-day lead. Scheduling consumes a fresh official snapshot or your own stored custom event without another upstream request. If dates change, cancel and reschedule explicitly. Delivery requires both automatic push and **Calendar reminders**, plus an enabled personal channel; calendar delivery is off by default. **Errors only** filters task/redemption results, not explicit calendar subscriptions.
+
+The backend checks local reminders every 30 seconds (up to 50 per batch). Subscription consumption and encrypted outbox entries are committed atomically, preventing repeat enqueue after restart. Uncertain sends are not replayed. Reminders expire 15 minutes after the planned reminder time or 5 minutes after the event target, whichever comes first, rather than sending an overdue batch. User/account/channel eligibility is checked again at dispatch. Up to 200 personal reminders are retained, with explicit terminal-history cleanup. Submitted notifications cannot be recalled; provider acceptance does not prove device delivery. Migration files exclude calendars and reminders.
 
 ## Performance and resources
 
@@ -153,7 +188,7 @@ Reference footprint from a Linux/amd64 build on 2026-09-11. Image sizes are unco
 
 For both services, allow at least 2 CPUs, 2 GiB RAM and over 3 GiB free disk. Local builds should have 4 GiB RAM and at least 5 GiB free disk, excluding growing caches/backups/logs. Idle measurements are not peak-capacity guarantees. The solver uses one worker; increasing workers is not supported.
 
-Stable tags publish source and Linux archives. `develop` additionally supports private images after complete CI and signed-source verification; see the [development image guide](https://github.com/eleost04/miyohub/blob/develop/README.en.md#tracking-development-images). Publishing does not automatically replace production containers. Review the target version's Compose file and configuration before switching images. Solver images and models are not included; check their third-party redistribution terms separately.
+The current public Docker Hub preview is `eleost/miyohub:0.2.0-beta.2`, for Linux amd64 only. See the [roadmap](ROADMAP.md) for the source commit and digest. GitHub Release archives and container images are separate publication units; publishing an image does not update production automatically. The existing private develop-image workflow and guards are retained, but MIYOHUB_PUBLISH_DEV_IMAGE is disabled for this repository so a public repository does not trigger private-scope checks. GHCR package visibility is not changed automatically. Solver images and models are not included; check their third-party terms separately.
 
 ## Upgrade, backup and logs
 
@@ -198,3 +233,5 @@ Versioned content is limited to core source, necessary tests, dependency locks, 
 [MiyoQian](https://github.com/ytf211/MiyoQian), [MiyoSign](https://github.com/ytf211/miyosign) and [MihoyoBBSTools](https://github.com/Womsxd/MihoyoBBSTools) inform API compatibility and feature design. Captcha references include [this discussion](https://github.com/Womsxd/MihoyoBBSTools/issues/198) and [test_nine](https://github.com/luguoyixiazi/test_nine).
 
 This project is not affiliated with miHoYo or the projects above. Third-party code, models and services remain subject to their respective terms; referencing a project does not grant additional rights.
+
+The project's own license remains a maintainer decision; repository visibility does not grant additional usage or redistribution rights.

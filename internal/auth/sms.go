@@ -40,16 +40,24 @@ type SMSState struct {
 
 type SMSChallenge struct {
 	ID         string    `json:"id"`
+	Version    int       `json:"version"`
 	GT         string    `json:"gt"`
-	Challenge  string    `json:"challenge"`
+	Challenge  string    `json:"challenge,omitempty"`
+	RiskType   string    `json:"risk_type,omitempty"`
+	SessionID  string    `json:"session_id,omitempty"`
 	NewCaptcha bool      `json:"new_captcha"`
 	ExpiresAt  time.Time `json:"expires_at"`
 	Operation  string    `json:"operation"`
 }
 type SMSCaptchaSolution struct {
-	ID        string `json:"id"`
-	Challenge string `json:"challenge"`
-	Validate  string `json:"validate"`
+	ID            string `json:"id"`
+	Challenge     string `json:"challenge,omitempty"`
+	Validate      string `json:"validate,omitempty"`
+	CaptchaID     string `json:"captcha_id,omitempty"`
+	LotNumber     string `json:"lot_number,omitempty"`
+	CaptchaOutput string `json:"captcha_output,omitempty"`
+	PassToken     string `json:"pass_token,omitempty"`
+	GenTime       string `json:"gen_time,omitempty"`
 }
 type smsPending struct {
 	public          SMSChallenge
@@ -81,7 +89,7 @@ type SMSManager struct {
 }
 
 func NewSMSManager(s *store.Store) *SMSManager {
-	return &SMSManager{store: s, client: mihoyo.NewClient(""), sessions: map[string]*smsSession{}, phones: map[string]time.Time{}}
+	return &SMSManager{store: s, client: mihoyo.NewClient("", s.NetworkConfig), sessions: map[string]*smsSession{}, phones: map[string]time.Time{}}
 }
 
 func (m *SMSManager) Send(parent context.Context, userID, phone, name, target string, verificationMode ...string) (SMSState, error) {
@@ -300,6 +308,15 @@ func (m *SMSManager) request(ctx context.Context, userID string, current *smsSes
 		if aigis == "" {
 			return nil, fmt.Errorf("短信登录失败：%s (%d)", text(result["message"], "请稍后重试"), retcode(result))
 		}
+		verification, err := parseAigis(aigis)
+		if err != nil {
+			return nil, err
+		}
+		if verification.Version == 4 {
+			// Configured /pass_nine providers implement V3, not V4. Do not
+			// send an incomplete challenge to them or spend their quota.
+			return nil, m.requireCaptcha(ctx, userID, current, path, body, aigis, "此安全验证需要在页面完成，验证后继续当前短信请求。")
+		}
 		if current.manual || suppliedAnswer != "" || attempt >= min(3, config.MaxRetries) {
 			return nil, m.requireCaptcha(ctx, userID, current, path, body, aigis, "请在页面完成人机验证，验证通过后继续当前短信请求。")
 		}
@@ -312,27 +329,19 @@ func (m *SMSManager) request(ctx context.Context, userID string, current *smsSes
 }
 
 func solveAigis(ctx context.Context, client *http.Client, config model.CaptchaConfig, raw string) (string, error) {
-	var envelope map[string]any
-	if json.Unmarshal([]byte(raw), &envelope) != nil {
-		return "", errors.New("安全验证参数异常，请使用扫码登录")
+	verification, err := parseAigis(raw)
+	if err != nil {
+		return "", err
 	}
-	payload := dataMap(envelope["data"])
-	if nested, ok := envelope["data"].(string); ok {
-		_ = json.Unmarshal([]byte(nested), &payload)
+	if verification.Version != 3 {
+		return "", errors.New("此安全验证需要在页面手动完成")
 	}
-	if len(payload) == 0 {
-		payload = dataMap(envelope["mmt_data"])
-	}
-	sessionID := text(envelope["session_id"], "")
-	if sessionID == "" {
-		return "", errors.New("安全验证缺少会话信息，请使用扫码登录")
-	}
-	solution, err := captcha.SolveConfigured(ctx, client, config, text(payload["gt"], ""), text(payload["challenge"], ""), nil)
+	solution, err := captcha.SolveConfigured(ctx, client, config, verification.GT, verification.Challenge, nil)
 	if err != nil {
 		return "", err
 	}
 	answer, _ := json.Marshal(map[string]string{"geetest_challenge": solution.Challenge, "geetest_validate": solution.Validate, "geetest_seccode": solution.Validate + "|jordan"})
-	return sessionID + ";" + base64.StdEncoding.EncodeToString(answer), nil
+	return verification.SessionID + ";" + base64.StdEncoding.EncodeToString(answer), nil
 }
 
 func smsBody(phone string) (map[string]any, error) {

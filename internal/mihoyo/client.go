@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/eleost04/miyohub/internal/model"
 )
 
 const DefaultMobileUA = "Mozilla/5.0 (Linux; Android 12; Unspecified Device) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/103.0.5060.129 Mobile Safari/537.36 miHoYoBBS/2.106.2"
@@ -20,8 +22,12 @@ type Client struct {
 	UserAgent string
 }
 
-func NewClient(baseURL string) *Client {
-	return &Client{HTTP: &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, BaseURL: strings.TrimRight(baseURL, "/"), UserAgent: DefaultMobileUA}
+func NewClient(baseURL string, network ...func() model.NetworkConfig) *Client {
+	c := &Client{HTTP: &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, BaseURL: strings.TrimRight(baseURL, "/"), UserAgent: DefaultMobileUA}
+	if len(network) > 0 && network[0] != nil {
+		c.HTTP.Transport = newUpstreamTransport(http.DefaultTransport, network[0])
+	}
+	return c
 }
 
 func (c *Client) JSON(ctx context.Context, method, path string, query url.Values, body any, headers http.Header, out any) error {
@@ -67,7 +73,7 @@ func (c *Client) JSONWithHeaders(ctx context.Context, method, path string, query
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return response.Header, fmt.Errorf("mihoyo http %d", response.StatusCode)
+		return response.Header, &HTTPStatusError{StatusCode: response.StatusCode, RetryAfter: response.Header.Get("Retry-After")}
 	}
 	if out == nil {
 		return response.Header, nil
@@ -84,6 +90,15 @@ func (c *Client) JSONWithHeaders(ctx context.Context, method, path string, query
 	}
 	return response.Header, nil
 }
+
+// Carries status metadata without retaining response bodies or request URLs.
+// Retry policy belongs to callers, since some GET endpoints have side effects.
+type HTTPStatusError struct {
+	StatusCode int
+	RetryAfter string
+}
+
+func (e *HTTPStatusError) Error() string { return fmt.Sprintf("mihoyo http %d", e.StatusCode) }
 
 // URL errors include query-string credentials; keep only the underlying cause.
 func SafeNetworkError(err error) error {

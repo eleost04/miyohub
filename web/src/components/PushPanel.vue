@@ -45,10 +45,12 @@ const removing = computed(() => draft.value?.channels.find(channel => channel.ui
 const options = [
   { key: 'tasks', icon: 'check', title: '签到结果', description: '游戏、云游戏与米游币，按账号汇总' },
   { key: 'exchange', icon: 'gift', title: '兑换结果', description: '成功、失败、停止与结果待确认' },
-  { key: 'error_only', icon: 'filter', title: '仅提醒异常', description: '不发送正常完成的自动通知' },
+  { key: 'calendar', icon: 'clock', title: '日历提醒', description: '仅发送你在活动日历中明确安排的提醒' },
+  { key: 'error_only', icon: 'filter', title: '仅提醒异常', description: '只过滤签到与兑换结果，不影响日历提醒' },
 ] as const
 const deliveryLabels: Record<string, string> = { pending: '等待发送', sending: '发送中', accepted: '服务已接收', failed: '发送失败', unknown: '发送结果待确认', skipped: '已跳过' }
 const bindingLabels: Record<string, string> = { ready: '通知会话已就绪', waiting_message: '请先在微信发送一条消息', expired: '登录已过期，请重新扫码', reconnecting: '连接中断，正在重连' }
+const qqLabels: Record<string, string> = { connecting: '正在连接 QQ 网关', ready: 'QQ 机器人已上线', reconnecting: 'QQ 连接中断，正在重试', disconnected: 'QQ 网关已断开', error: 'QQ 连接需要处理' }
 defineExpose({ dirty, flush: autosave.flush })
 
 function channelFields(channel: ChannelDraft) { return channel.provider === 'wechat_claw' && channel.mode === 'ilink' ? [] : providerInfo(channel.provider).fields }
@@ -64,7 +66,12 @@ async function syncActivity() {
   activityBusy = true
   try {
     const [records, config] = await Promise.all([api<PushDelivery[]>('/api/v1/push/history', { signal: controller.signal }), api<PushSettings>('/api/v1/push/config', { signal: controller.signal })])
-    if (active) { history.value = records; historyError.value = ''; bindingStates.value = Object.fromEntries(config.channels.map(c => [c.id, c.binding_state])); bindingErrors.value = Object.fromEntries(config.channels.map(c => [c.id, c.binding_error || ''])) }
+    if (active) {
+      history.value = records; historyError.value = ''; bindingStates.value = Object.fromEntries(config.channels.map(c => [c.id, c.binding_state])); bindingErrors.value = Object.fromEntries(config.channels.map(c => [c.id, c.binding_error || '']))
+      // A QR task may complete after its dialog is closed or in another tab.
+      // Synchronize saved channels without overwriting an unfinished edit.
+      if (draft.value && config.revision > draft.value.revision && !dirty.value && !busy.value) apply(config)
+    }
   } catch { if (active) historyError.value = '发送记录暂时无法刷新，正在重试。' }
   finally { activityBusy = false }
 }
@@ -179,7 +186,7 @@ onUnmounted(() => { active = false; window.clearInterval(activityTimer); control
             <button type="button" class="quick-bind-card" :disabled="dirty || draft.channels.length >= 10" @click="openBinding('qqbot')"><span class="push-provider-mark" data-tone="blue"><ProviderIcon name="qqbot" /></span><span><strong>QQ 扫码绑定</strong><small>扫码创建或选择机器人</small></span><AppIcon name="scan" :size="21" /></button>
             <button type="button" class="quick-bind-card weixin-bind" :disabled="dirty || draft.channels.length >= 10" @click="openBinding('wechat_claw')"><span class="push-provider-mark" data-tone="sage"><ProviderIcon name="wechat_claw" /></span><span><strong>微信扫码绑定</strong><small>通过微信 iLink 连接</small></span><AppIcon name="scan" :size="21" /></button>
           </div>
-          <label class="push-master"><span><strong>自动发送任务结果</strong><small>按下方选项，发送你绑定的米游社账号的任务结果。关闭后仍可在站内查看。</small></span><span class="push-switch"><input v-model="draft.enable" type="checkbox" aria-label="启用自动推送" /><span aria-hidden="true"></span></span></label>
+          <label class="push-master"><span><strong>自动发送通知</strong><small>按下方选项，发送自己账号的任务结果与已安排的日历提醒。关闭后仍可在站内查看。</small></span><span class="push-switch"><input v-model="draft.enable" type="checkbox" aria-label="启用自动推送" /><span aria-hidden="true"></span></span></label>
           <div class="push-options"><label v-for="option in options" :key="option.key" class="push-option"><AppIcon :name="option.icon" :size="19" /><span><strong>{{ option.title }}</strong><small>{{ option.description }}</small></span><input v-model="draft[option.key]" type="checkbox" :aria-label="option.title" /></label></div>
           <div class="push-section-title"><h3>选择接收方式</h3><small>点击卡片配置 · 可同时启用</small></div>
           <div class="push-provider-grid" role="group" aria-label="选择推送渠道">
@@ -200,10 +207,13 @@ onUnmounted(() => { active = false; window.clearInterval(activityTimer); control
                 <label v-if="mobile || dialogChannel === channel.ui_key" class="push-master push-channel-master"><span><strong>启用这个接收渠道</strong><small>{{ draft.enable ? '保存后接收已勾选的任务结果。' : '自动推送当前关闭，保存渠道不会打开总开关。' }}</small></span><span class="push-switch"><input v-model="channel.enable" type="checkbox" aria-label="启用这个接收渠道" /><span aria-hidden="true"></span></span></label>
                 <p class="push-channel-hint">{{ providerInfo(channel.provider).hint }}</p>
                 <div v-if="channel.provider === 'qqbot' || channel.provider === 'wechat_claw'" class="push-binding-status">
+                  <span v-if="channel.provider === 'qqbot'" class="pill" :class="{ soft: (bindingStates[channel.id] || channel.binding_state) === 'ready' }">{{ qqLabels[bindingStates[channel.id] || channel.binding_state] || '等待 QQ 连接状态' }}</span>
                   <span v-if="channel.provider === 'wechat_claw' && channel.mode === 'ilink'" class="pill" :class="{ soft: channel.enable && bindingStates[channel.id] === 'ready' }">{{ !channel.enable ? '渠道已关闭 · 接收已暂停' : bindingLabels[bindingStates[channel.id] || channel.binding_state] || '等待连接' }}</span>
                   <button type="button" class="small-button" :disabled="dirty || !channel.id" @click="openBinding(channel.provider, channel.id)"><AppIcon name="scan" :size="15" />{{ channel.configured.includes('token') || channel.configured.includes('client_secret') ? '重新扫码绑定' : '扫码配置' }}</button>
                 </div>
                 <p v-if="channel.provider === 'wechat_claw' && channel.mode === 'ilink'" class="push-channel-hint">绑定用户：{{ channel.openid || '尚未绑定' }}。启用渠道时会保持官方消息连接；关闭渠道即可停止连接。</p>
+                <p v-if="channel.provider === 'qqbot'" class="push-channel-hint">绑定后保持 QQ 官方连接，不回复或保存聊天。渠道开关只控制通知发送；删除渠道或清除 ClientSecret 后断开连接。</p>
+                <p v-if="channel.provider === 'qqbot' && (bindingErrors[channel.id] ?? channel.binding_error)" class="error-text" role="status">{{ bindingErrors[channel.id] ?? channel.binding_error }}</p>
                 <p v-if="channel.provider === 'wechat_claw' && channel.mode === 'ilink' && channel.enable && (bindingErrors[channel.id] ?? channel.binding_error)" class="error-text" role="status">{{ bindingErrors[channel.id] ?? channel.binding_error }}</p>
                 <div class="push-input-grid">
                   <label class="push-input"><span>渠道名称</span><input v-model="channel.name" maxlength="64" required :aria-label="providerInfo(channel.provider).name + ' 渠道名称'" /></label>

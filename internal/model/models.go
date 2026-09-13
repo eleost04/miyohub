@@ -5,17 +5,19 @@ import "time"
 const DefaultTimezone = "Asia/Shanghai"
 
 type State struct {
-	Config           Config                       `json:"config"`
-	Users            []User                       `json:"users"`
-	Sessions         map[string]Session           `json:"sessions"`
-	Logs             []LogEntry                   `json:"logs"`
-	InviteCodes      []InviteCode                 `json:"invite_codes"`
-	RegistrationMode string                       `json:"registration_mode"`
-	UserPush         map[string]PushConfig        `json:"user_push"`
-	UserCaptcha      map[string]UserCaptchaConfig `json:"user_captcha"`
-	CaptchaActivity  map[string][]CaptchaAttempt  `json:"captcha_activity,omitempty"`
-	CaptchaProbes    map[string]CaptchaProbe      `json:"captcha_probes,omitempty"`
-	PushDeliveries   []PushDelivery               `json:"push_deliveries"`
+	Config            Config                       `json:"config"`
+	Users             []User                       `json:"users"`
+	Sessions          map[string]Session           `json:"sessions"`
+	Logs              []LogEntry                   `json:"logs"`
+	InviteCodes       []InviteCode                 `json:"invite_codes"`
+	RegistrationMode  string                       `json:"registration_mode"`
+	UserPush          map[string]PushConfig        `json:"user_push"`
+	UserCaptcha       map[string]UserCaptchaConfig `json:"user_captcha"`
+	CaptchaActivity   map[string][]CaptchaAttempt  `json:"captcha_activity,omitempty"`
+	CaptchaProbes     map[string]CaptchaProbe      `json:"captcha_probes,omitempty"`
+	PushDeliveries    []PushDelivery               `json:"push_deliveries"`
+	CalendarEvents    []CustomCalendarEvent        `json:"calendar_events,omitempty"`
+	CalendarReminders []CalendarReminder           `json:"calendar_reminders,omitempty"`
 }
 
 type Config struct {
@@ -26,6 +28,7 @@ type Config struct {
 	Games      GamesConfig      `json:"games"`
 	CloudGames CloudGamesConfig `json:"cloud_games"`
 	BBS        BBSConfig        `json:"bbs"`
+	Network    NetworkConfig    `json:"network"`
 	Captcha    CaptchaConfig    `json:"captcha"`
 	Schedule   Schedule         `json:"schedule"`
 	Push       PushConfig       `json:"push"`
@@ -47,6 +50,7 @@ type Account struct {
 	ID              string                 `json:"id"`
 	UserID          string                 `json:"user_id"`
 	Name            string                 `json:"name"`
+	Group           string                 `json:"group,omitempty"`
 	Cookie          string                 `json:"cookie"`
 	Stuid           string                 `json:"stuid"`
 	Stoken          string                 `json:"stoken"`
@@ -98,14 +102,37 @@ type CloudGamesConfig struct {
 }
 
 type BBSConfig struct {
-	Forums       []int `json:"forums"`
-	Checkin      bool  `json:"checkin"`
-	Read         bool  `json:"read"`
-	Like         bool  `json:"like"`
-	Share        bool  `json:"share"`
-	CancelLike   bool  `json:"cancel_like"`
-	PostLimit    int   `json:"post_limit"`
-	DelaySeconds []int `json:"delay_seconds"`
+	RunAllSelected bool  `json:"run_all_selected"`
+	Forums         []int `json:"forums"`
+	Checkin        bool  `json:"checkin"`
+	Read           bool  `json:"read"`
+	Like           bool  `json:"like"`
+	Share          bool  `json:"share"`
+	CancelLike     bool  `json:"cancel_like"`
+	PostLimit      int   `json:"post_limit"`
+	DelaySeconds   []int `json:"delay_seconds"`
+}
+
+type NetworkConfig struct {
+	// nil preserves the default for configurations created before this field.
+	BBSStateRetries *int        `json:"bbs_state_retries,omitempty"`
+	Proxy           ProxyConfig `json:"proxy"`
+}
+
+type ProxyConfig struct {
+	Enabled       bool   `json:"enable"`
+	URL           string `json:"url"`
+	Username      string `json:"username"`
+	Password      string `json:"password"`
+	HasPassword   bool   `json:"has_password,omitempty"` // Public view only.
+	ClearPassword bool   `json:"clear_password,omitempty"`
+}
+
+func (n NetworkConfig) StateRetries() int {
+	if n.BBSStateRetries == nil {
+		return 5
+	}
+	return max(0, min(10, *n.BBSStateRetries))
 }
 
 type CaptchaConfig struct {
@@ -175,6 +202,7 @@ type PushConfig struct {
 	Enabled   bool          `json:"enable"`
 	Tasks     bool          `json:"tasks"`
 	Exchange  bool          `json:"exchange"`
+	Calendar  bool          `json:"calendar"`
 	Revision  int           `json:"revision"`
 	ErrorOnly bool          `json:"error_only"`
 	Channels  []PushChannel `json:"channels"`
@@ -222,6 +250,7 @@ type PushDelivery struct {
 	ChannelName string    `json:"channel_name"`
 	Provider    string    `json:"provider"`
 	Kind        string    `json:"kind"`
+	ReferenceID string    `json:"reference_id,omitempty"`
 	Revision    int       `json:"revision"`
 	Title       string    `json:"title"`
 	Message     string    `json:"message"`
@@ -311,6 +340,8 @@ type LogEntry struct {
 	Component string    `json:"component"`
 	Message   string    `json:"message"`
 	UserID    string    `json:"user_id,omitempty"`
+	AccountID string    `json:"account_id,omitempty"`
+	RunID     string    `json:"run_id,omitempty"`
 }
 
 type AuthStatus struct {

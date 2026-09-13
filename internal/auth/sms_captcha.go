@@ -5,9 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"strings"
 	"time"
 )
 
@@ -47,20 +45,9 @@ func (m *SMSManager) failSend(userID string, current *smsSession) {
 }
 
 func (m *SMSManager) requireCaptcha(ctx context.Context, userID string, current *smsSession, path string, body map[string]any, raw, message string) error {
-	var envelope map[string]any
-	if json.Unmarshal([]byte(raw), &envelope) != nil {
-		return errors.New("安全验证参数异常，请重新获取或使用扫码登录")
-	}
-	payload := dataMap(envelope["data"])
-	if nested, ok := envelope["data"].(string); ok {
-		_ = json.Unmarshal([]byte(nested), &payload)
-	}
-	if len(payload) == 0 {
-		payload = dataMap(envelope["mmt_data"])
-	}
-	gt, challenge, sessionID := text(payload["gt"], ""), text(payload["challenge"], ""), text(envelope["session_id"], "")
-	if !captchaAnswerPattern.MatchString(gt) || !captchaAnswerPattern.MatchString(challenge) || sessionID == "" || len(sessionID) > 512 || strings.ContainsAny(sessionID, ";\r\n\x00") {
-		return errors.New("上游未返回受支持的人机验证参数，请重新获取或使用扫码登录")
+	verification, err := parseAigis(raw)
+	if err != nil {
+		return err
 	}
 	rawID := make([]byte, 16)
 	if _, err := rand.Read(rawID); err != nil {
@@ -79,11 +66,17 @@ func (m *SMSManager) requireCaptcha(ctx context.Context, userID string, current 
 		return errors.New("人机验证尝试次数过多，请重新获取短信验证码")
 	}
 	current.captchaAttempts++
-	public := SMSChallenge{ID: hex.EncodeToString(rawID), GT: gt, Challenge: challenge, NewCaptcha: true, ExpiresAt: time.Now().Add(2 * time.Minute), Operation: operation}
-	if value, ok := payload["new_captcha"].(bool); ok {
-		public.NewCaptcha = value
+	public := SMSChallenge{ID: hex.EncodeToString(rawID), Version: verification.Version, GT: verification.GT, Challenge: verification.Challenge, NewCaptcha: verification.NewCaptcha, ExpiresAt: time.Now().Add(2 * time.Minute), Operation: operation}
+	if current.state.ExpiresAt.Before(public.ExpiresAt) {
+		public.ExpiresAt = current.state.ExpiresAt
 	}
-	current.pending = &smsPending{public: public, sessionID: sessionID, path: path, body: body}
+	if verification.Version == 4 {
+		// V4 binds its public widget proof to this short-lived upstream risk
+		// session. This is not a site login session, Cookie or SToken. The
+		// authoritative request/session remains server-owned when resuming.
+		public.RiskType, public.SessionID = verification.RiskType, verification.SessionID
+	}
+	current.pending = &smsPending{public: public, sessionID: verification.SessionID, path: path, body: body}
 	current.state.Status, current.state.Message, current.state.Challenge = "captcha_required", message, &public
 	return ErrSMSCaptchaRequired
 }
@@ -92,7 +85,7 @@ func (m *SMSManager) requireCaptcha(ctx context.Context, userID string, current 
 // original server-owned request. Browser input can never select a URL/session,
 // change the phone, request a login for another owner, or replay a solution.
 func (m *SMSManager) CompleteCaptcha(parent context.Context, userID string, solution SMSCaptchaSolution) (SMSState, error) {
-	if !captchaAnswerPattern.MatchString(solution.ID) || !captchaAnswerPattern.MatchString(solution.Challenge) || !captchaAnswerPattern.MatchString(solution.Validate) {
+	if !captchaAnswerPattern.MatchString(solution.ID) {
 		return m.State(userID), errors.New("人机验证结果格式无效，请重新验证")
 	}
 	ctx, cancel := context.WithTimeout(parent, 90*time.Second)
@@ -108,12 +101,16 @@ func (m *SMSManager) CompleteCaptcha(parent context.Context, userID string, solu
 		return m.State(userID), errors.New("正在提交验证，请勿重复操作")
 	}
 	pending := current.pending
+	answer, err := smsCaptchaAnswer(pending.public, solution)
+	if err != nil {
+		m.mu.Unlock()
+		return m.State(userID), err
+	}
 	current.pending, current.state.Challenge = nil, nil
 	current.busy, current.cancel = true, cancel
 	current.state.Status, current.state.Message = "verifying", "正在提交人机验证结果…"
 	m.mu.Unlock()
 	defer func() { m.mu.Lock(); current.busy, current.cancel = false, nil; m.mu.Unlock() }()
-	answer, _ := json.Marshal(map[string]string{"geetest_challenge": solution.Challenge, "geetest_validate": solution.Validate, "geetest_seccode": solution.Validate + "|jordan"})
 	data, err := m.request(ctx, userID, current, pending.path, pending.body, pending.sessionID+";"+base64.StdEncoding.EncodeToString(answer))
 	if err != nil {
 		if errors.Is(err, ErrSMSCaptchaRequired) {

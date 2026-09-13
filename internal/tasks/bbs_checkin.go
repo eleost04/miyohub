@@ -9,6 +9,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,6 +44,9 @@ func missions(state map[string]any, cfg model.BBSConfig) []mission {
 				continue
 			}
 			m.present = true
+			if cfg.RunAllSelected {
+				continue
+			}
 			if boolValue(raw["is_get_award"]) {
 				m.remaining = 0
 			} else {
@@ -51,19 +56,11 @@ func missions(state map[string]any, cfg model.BBSConfig) []mission {
 	}
 	// New rules omit daily community sign-in from this list (some accounts
 	// return only onboarding missions 62/64). Its absence is NOT completion.
-	// Retired interaction missions, however, must not trigger unsolicited likes.
-	if state["states"] != nil {
-		for i := range result {
-			found := false
-			for _, raw := range maps(state["states"]) {
-				if intValue(raw["mission_id"]) == result[i].id {
-					found = true
-					break
-				}
-			}
-			if !found && result[i].id != 58 {
-				result[i].remaining = 0
-			}
+	// Retired interaction missions must not trigger unsolicited likes. The
+	// account owner can explicitly opt into bounded, reward-independent actions.
+	for i := range result {
+		if !cfg.RunAllSelected && !result[i].present && result[i].id != 58 {
+			result[i].remaining = 0
 		}
 	}
 	return result
@@ -82,7 +79,8 @@ func (b BBSCheckin) Run(ctx context.Context) model.TaskSummary {
 	}
 	initial := intValue(state["already_received_points"])
 	b.add(fmt.Sprintf("今日已得 %d，还可获得 %d，余额 %d", initial, intValue(state["can_get_points"]), intValue(state["total_points"])))
-	if state["can_get_points"] != nil && intValue(state["can_get_points"]) == 0 {
+	b.describeMissions(state)
+	if !b.Config.BBS.RunAllSelected && state["can_get_points"] != nil && intValue(state["can_get_points"]) == 0 {
 		summary.Skipped++
 		summary.Status = "already_complete"
 		summary.Reason = fmt.Sprintf("今日已领取 %d 米游币，剩余可领取 0；本次仅检查状态，未重复执行任务。", initial)
@@ -102,9 +100,9 @@ func (b BBSCheckin) Run(ctx context.Context) model.TaskSummary {
 			summary.Skipped++
 			switch {
 			case !m.enabled:
-				b.add(m.label + "未启用，跳过")
+				b.add(m.label + "：账号设置未开启，本次跳过")
 			case !m.present:
-				b.add(m.label + "：当前上游未提供该互动任务，跳过")
+				b.add(fmt.Sprintf("%s：任务列表未返回对应项目（ID %d），本次跳过", m.label, m.id))
 			default:
 				b.add(m.label + "已完成，跳过")
 			}
@@ -155,15 +153,13 @@ func (b BBSCheckin) Run(ctx context.Context) model.TaskSummary {
 			case 59:
 				_, err = b.request(ctx, http.MethodGet, "/post/api/getPostFull", url.Values{"post_id": {id}}, nil, false)
 			case 60:
-				body := map[string]any{"post_id": id, "is_cancel": false, "gids": text(post["gids"], "")}
-				_, err = b.request(ctx, http.MethodPost, "/post/api/post/upvote", nil, body, true)
+				_, err = b.upvote(ctx, id, text(post["gids"], ""), false)
 				if err == nil && b.Config.BBS.CancelLike {
 					b.record(&summary, "点赞 "+title, nil)
 					if !taskDelay(ctx, b.Config.BBS.DelaySeconds) {
 						return summary
 					}
-					body["is_cancel"] = true
-					_, err = b.request(ctx, http.MethodPost, "/post/api/post/upvote", nil, body, true)
+					_, err = b.upvote(ctx, id, text(post["gids"], ""), true)
 					b.record(&summary, "取消点赞 "+title, err)
 					if errors.Is(err, errCredentials) {
 						return summary
@@ -191,12 +187,12 @@ func (b BBSCheckin) Run(ctx context.Context) model.TaskSummary {
 	} else {
 		b.add(fmt.Sprintf("米游币本次新增 %d，今日已得 %d，剩余可得 %d，余额 %d", max(0, intValue(final["already_received_points"])-initial), intValue(final["already_received_points"]), intValue(final["can_get_points"]), intValue(final["total_points"])))
 		for _, m := range missions(final, b.Config.BBS) {
-			if m.enabled && m.present && m.remaining > 0 {
+			if !b.Config.BBS.RunAllSelected && m.enabled && m.present && m.remaining > 0 {
 				summary.Failed++
 				b.add(fmt.Sprintf("%s仍有 %d 项未完成", m.label, m.remaining))
 			}
 		}
-		if intValue(final["can_get_points"]) > 0 && intValue(final["already_received_points"]) <= initial && summary.Failed == 0 {
+		if !b.Config.BBS.RunAllSelected && intValue(final["can_get_points"]) > 0 && intValue(final["already_received_points"]) <= initial && summary.Failed == 0 {
 			summary.Failed++
 			b.add("增币尚未确认：仍有可得米游币但本次未增加。请在米游社核对当日规则或稍后查看，不能将操作成功视为奖励到账")
 		}
@@ -204,14 +200,81 @@ func (b BBSCheckin) Run(ctx context.Context) model.TaskSummary {
 	return summary
 }
 
+// Record only bounded numeric mission identifiers and local switches, never
+// raw upstream payloads, mission names, request headers or account credentials.
+func (b BBSCheckin) describeMissions(state map[string]any) {
+	policy := "；未列出的互动项目不执行，不代表程序不支持"
+	if b.Config.BBS.RunAllSelected {
+		policy = "；按账号所选项目执行，不以奖励任务进度决定是否跳过"
+		b.add("米游币执行方式：按所选项目执行；操作成功不等于获得米游币，手动再次运行会重新执行")
+	} else {
+		b.add("米游币执行方式：按奖励进度执行；已完成或未列出的互动项目跳过")
+	}
+	ids := []int{}
+	seen := map[int]bool{}
+	for _, raw := range maps(state["states"]) {
+		id := intValue(raw["mission_id"])
+		if id > 0 && id <= 1_000_000 && !seen[id] && len(ids) < 20 {
+			ids = append(ids, id)
+			seen[id] = true
+		}
+	}
+	sort.Ints(ids)
+	values := []string{}
+	for _, id := range ids {
+		values = append(values, strconv.Itoa(id))
+	}
+	if len(values) > 0 {
+		b.add("米游币任务列表：本次返回的任务 ID：" + strings.Join(values, "、") + policy)
+	} else {
+		note := "任务列表没有可识别的任务 ID"
+		switch rows := state["states"].(type) {
+		case nil:
+			note = "上游未返回任务列表"
+		case []any:
+			if len(rows) == 0 {
+				note = "上游任务列表为空"
+			}
+		default:
+			note = "上游任务列表格式异常"
+		}
+		b.add("米游币任务列表：" + note + policy)
+	}
+	switches := []string{}
+	for _, m := range missions(state, b.Config.BBS) {
+		label := m.label + "关闭"
+		if m.enabled {
+			label = m.label + "开启"
+		}
+		switches = append(switches, label)
+	}
+	b.add("米游币任务设置：" + strings.Join(switches, "、"))
+}
+
 func (b BBSCheckin) state(ctx context.Context) (map[string]any, error) {
-	return b.request(ctx, http.MethodGet, "/apihub/wapi/getUserMissionsState", url.Values{"point_sn": {"myb"}}, nil, false)
+	return b.request(ctx, http.MethodGet, mihoyo.BBSStatePath, url.Values{"point_sn": {"myb"}}, nil, false)
+}
+
+func (b BBSCheckin) upvote(ctx context.Context, postID, gids string, cancel bool) (map[string]any, error) {
+	// MiyoSign and MiyoQian use different upvote routes. Switch only on a
+	// definite missing-route response, never after an uncertain write result,
+	// a captcha challenge, rate limiting or an authentication failure.
+	body := map[string]any{"post_id": postID, "is_cancel": cancel}
+	result, err := b.request(ctx, http.MethodPost, mihoyo.BBSUpvotePath, nil, body, true)
+	var status *mihoyo.HTTPStatusError
+	if errors.As(err, &status) && (status.StatusCode == http.StatusNotFound || status.StatusCode == http.StatusGone) && ctx.Err() == nil {
+		b.add("点赞接口返回 HTTP 404/410，改用兼容接口；网络超时不会重复提交")
+		body["gids"] = gids
+		return b.request(ctx, http.MethodPost, mihoyo.BBSPostVotePath, nil, body, true)
+	}
+	return result, err
 }
 
 // Retry only the read-only mission-state query. Some BBS GET endpoints mutate
 // progress (e.g. sharing), so applying retries to every GET is not safe.
 // InspectState intentionally keeps its single-request diagnostic contract.
 func (b BBSCheckin) stateWithRetry(ctx context.Context) (map[string]any, error) {
+	retries := b.Config.Network.StateRetries()
 	for attempt := 0; ; attempt++ {
 		state, err := b.state(ctx)
 		if err == nil {
@@ -223,11 +286,28 @@ func (b BBSCheckin) stateWithRetry(ctx context.Context) (map[string]any, error) 
 		if ctx.Err() != nil || !retryableStateError(err) {
 			return state, err
 		}
-		if attempt >= 2 {
-			return nil, fmt.Errorf("网络连接或响应异常，任务状态查询重试后仍失败（这不是验证码错误；请检查服务器网络或稍后重试）: %w", err)
+		if attempt >= retries {
+			return nil, fmt.Errorf("米游币状态查询在 %d 次请求后仍失败（自动重试 %d 次；这不是验证码错误，请检查服务器网络或代理）: %w", attempt+1, attempt, err)
 		}
-		b.add(fmt.Sprintf("米游币任务状态查询遇到网络异常，%d 秒后进行第 %d/2 次重试（不重复签到或兑换）", attempt+1, attempt+1))
-		timer := time.NewTimer(time.Duration(attempt+1) * time.Second)
+		delay := time.Duration(1<<min(attempt, 3)) * time.Second
+		var status *mihoyo.HTTPStatusError
+		if errors.As(err, &status) && status.StatusCode == http.StatusTooManyRequests {
+			delay = max(delay, 30*time.Second)
+		}
+		if errors.As(err, &status) && status.RetryAfter != "" {
+			retryAfter := time.Duration(0)
+			if seconds, parseErr := strconv.Atoi(status.RetryAfter); parseErr == nil && seconds > 0 {
+				retryAfter = time.Duration(min(seconds, 86400)) * time.Second
+			} else if at, parseErr := http.ParseTime(status.RetryAfter); parseErr == nil {
+				retryAfter = time.Until(at)
+			}
+			if retryAfter > time.Minute {
+				return nil, fmt.Errorf("上游要求暂停查询超过一分钟，本次停止自动重试，请稍后查看任务状态: %w", err)
+			}
+			delay = max(delay, retryAfter)
+		}
+		b.add(fmt.Sprintf("米游币任务状态查询遇到网络异常，%.0f 秒后进行第 %d/%d 次重试（仅查询状态，不重发任务操作）", delay.Seconds(), attempt+1, retries))
+		timer := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -239,6 +319,13 @@ func (b BBSCheckin) stateWithRetry(ctx context.Context) (map[string]any, error) 
 
 func retryableStateError(err error) bool {
 	var networkError net.Error
+	var status *mihoyo.HTTPStatusError
+	if errors.As(err, &status) {
+		switch status.StatusCode {
+		case 408, 429, 500, 502, 503, 504:
+			return true
+		}
+	}
 	return errors.As(err, &networkError) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
 }
 
@@ -274,10 +361,7 @@ func (b BBSCheckin) request(ctx context.Context, method, path string, query url.
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		headers := b.headers(body)
-		if strings.Contains(path, "wapi") || strings.Contains(path, "ShareConf") {
-			headers.Set("Cookie", b.Account.Cookie)
-		}
+		headers := b.headers(path, body)
 		if challenge != "" {
 			headers.Set("x-rpc-challenge", challenge)
 		}
@@ -323,10 +407,22 @@ func (b BBSCheckin) passCaptcha(ctx context.Context) (string, error) {
 	}
 	return challenge, nil
 }
-func (b BBSCheckin) headers(body any) http.Header {
+func (b BBSCheckin) headers(path string, body any) http.Header {
+	if path == mihoyo.BBSStatePath || path == "/apihub/api/getShareConf" {
+		// Mission-state and web sharing use the full browser cookie/profile,
+		// not an app DS or an okhttp UA (both reference projects agree on state).
+		return http.Header{
+			"Accept": {"application/json, text/plain, */*"}, "Origin": {"https://webstatic.mihoyo.com"},
+			"User-Agent": {mihoyo.DefaultMobileUA}, "Referer": {"https://webstatic.mihoyo.com"},
+			"Accept-Language": {"zh-CN,en-US;q=0.8"}, "X-Requested-With": {"com.mihoyo.hyperion"}, "Cookie": {b.Account.Cookie},
+		}
+	}
 	cookie := b.Account.Cookie
 	if b.Account.Stuid != "" && b.Account.Stoken != "" {
-		cookie = "stuid=" + b.Account.Stuid + ";stoken=" + b.Account.Stoken + ";mid=" + b.Account.Mid
+		cookie = "stuid=" + b.Account.Stuid + ";stoken=" + b.Account.Stoken
+		if b.Account.Mid != "" {
+			cookie += ";mid=" + b.Account.Mid
+		}
 	}
 	headers := http.Header{"Accept": {"application/json"}, "Content-Type": {"application/json; charset=UTF-8"}, "User-Agent": {"okhttp/4.9.3"}, "Cookie": {cookie}, "X-Rpc-Device_id": {b.Config.Device.ID}, "X-Rpc-App_version": {"2.106.2"}, "X-Rpc-Client_type": {"2"}, "X-Rpc-Channel": {"miyousheluodi"}, "Referer": {"https://app.mihoyo.com"}, "Ds": {mihoyo.DS(false)}}
 	headers.Set("x-rpc-device_name", b.Config.Device.Name)
@@ -334,7 +430,8 @@ func (b BBSCheckin) headers(body any) http.Header {
 	headers.Set("x-rpc-sys_version", "12")
 	headers.Set("x-rpc-verify_key", "bll8iq97cem8")
 	headers.Set("x-rpc-csm_source", "home")
-	if body != nil {
+	headers.Set("x-rpc-h265_supported", "1")
+	if path == mihoyo.BBSSignPath && body != nil {
 		headers.Set("DS", mihoyo.DSX6("", compactJSON(body)))
 	}
 	if b.Config.Device.FP != "" {

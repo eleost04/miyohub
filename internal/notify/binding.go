@@ -16,14 +16,15 @@ import (
 	"sync"
 	"time"
 
-	qrcode "github.com/skip2/go-qrcode"
 	"github.com/eleost04/miyohub/internal/model"
+	qrcode "github.com/skip2/go-qrcode"
 )
 
 type BindingState struct {
 	SessionID string    `json:"session_id"`
 	Provider  string    `json:"provider"`
 	ChannelID string    `json:"channel_id"`
+	Revision  int       `json:"revision"`
 	Running   bool      `json:"running"`
 	Status    string    `json:"status"`
 	QRImage   string    `json:"qr_image"`
@@ -45,6 +46,7 @@ type BindingStore interface {
 	BindPushChannel(string, string, int, model.PushChannel) (string, error)
 }
 type Bindings struct {
+	OnBound      func()
 	store        BindingStore
 	sender       Sender
 	mu           sync.Mutex
@@ -76,6 +78,11 @@ func (m *Bindings) Start(userID, provider, channelID string, revision int) (Bind
 		return BindingState{}, errors.New("服务正在停止")
 	}
 	if old := m.sessions[userID]; old != nil {
+		if old.state.Running && old.ctx.Err() == nil && time.Now().Before(old.state.ExpiresAt) && old.state.Provider == provider && old.state.ChannelID == channelID && old.revision == revision {
+			// Reloading a page or retrying a lost HTTP response must not revoke
+			// the task still open in the official mobile application.
+			return old.state, nil
+		}
 		old.cancel()
 	}
 	// Bound memory use without allowing one user to cancel another user's login.
@@ -89,9 +96,11 @@ func (m *Bindings) Start(userID, provider, channelID string, revision int) (Bind
 		return BindingState{}, errors.New("扫码会话繁忙，请稍后重试")
 	}
 	var id [16]byte
-	_, _ = rand.Read(id[:])
+	if _, err := rand.Read(id[:]); err != nil {
+		return BindingState{}, errors.New("无法创建安全扫码会话")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	s := &bindingSession{userID: userID, revision: revision, ctx: ctx, cancel: cancel, verify: make(chan string, 1), base: weixinBase, state: BindingState{SessionID: hex.EncodeToString(id[:]), Provider: provider, ChannelID: channelID, Running: true, Status: "starting", Message: "正在获取官方二维码", ExpiresAt: time.Now().Add(5 * time.Minute)}}
+	s := &bindingSession{userID: userID, revision: revision, ctx: ctx, cancel: cancel, verify: make(chan string, 1), base: weixinBase, state: BindingState{SessionID: hex.EncodeToString(id[:]), Provider: provider, ChannelID: channelID, Revision: revision, Running: true, Status: "starting", Message: "正在获取官方二维码", ExpiresAt: time.Now().Add(5 * time.Minute)}}
 	m.sessions[userID] = s
 	m.wg.Add(1)
 	go m.run(s)
@@ -205,11 +214,17 @@ func (m *Bindings) run(s *bindingSession) {
 			s.state.ChannelID = id
 			s.state.Status = "confirmed"
 			s.state.Message = "绑定成功；请在消息推送中开启自动通知"
+			if channel.Provider == "qqbot" {
+				s.state.Message = "QQ 机器人凭据已保存，正在建立官方连接。可返回渠道配置查看上线状态；自动通知由推送开关控制。"
+			}
 			if channel.Provider == "wechat_claw" {
 				s.state.Message = "已绑定微信。请先给机器人发送一条消息，建立接收会话"
 			}
 			if channel.OpenID == "" {
 				s.state.Message = "机器人凭据已绑定，但官方未返回接收者 OpenID；请补充 OpenID 后启用渠道"
+			}
+			if m.OnBound != nil {
+				m.OnBound()
 			}
 			return
 		}
@@ -279,7 +294,7 @@ func (m *Bindings) qq(s *bindingSession) (model.PushChannel, error) {
 				}
 				appID = n.String()
 			}
-			return model.PushChannel{Provider: "qqbot", AppID: appID, ClientSecret: secret, OpenID: result.Data.OpenID, BindingState: "ready"}, nil
+			return model.PushChannel{Provider: "qqbot", AppID: appID, ClientSecret: secret, OpenID: result.Data.OpenID, BindingState: "connecting"}, nil
 		}
 	}
 	return model.PushChannel{}, s.ctx.Err()
