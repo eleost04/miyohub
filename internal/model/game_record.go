@@ -29,14 +29,39 @@ type GameNote struct {
 }
 
 type RecordSnapshot struct {
-	Game       string       `json:"game"`
-	Roles      []RecordRole `json:"roles"`
-	Role       *RecordRole  `json:"role,omitempty"`
-	Note       *GameNote    `json:"note,omitempty"`
-	ObservedAt time.Time    `json:"observed_at,omitzero"`
-	RefreshAt  time.Time    `json:"refresh_at,omitzero"`
-	Cached     bool         `json:"cached"`
-	Stale      bool         `json:"stale"`
-	Status     string       `json:"status"`
-	Message    string       `json:"message,omitempty"`
+	Game       string        `json:"game"`
+	Roles      []RecordRole  `json:"roles"`
+	Role       *RecordRole   `json:"role,omitempty"`
+	Note       *GameNote     `json:"note,omitempty"`
+	Calendar   *GameCalendar `json:"calendar,omitempty"`
+	ObservedAt time.Time     `json:"observed_at,omitzero"`
+	RefreshAt  time.Time     `json:"refresh_at,omitzero"`
+	Cached     bool          `json:"cached"`
+	Stale      bool          `json:"stale"`
+	Status     string        `json:"status"`
+	Message    string        `json:"message,omitempty"`
+}
+
+type CalendarEvent struct {
+	ID       string     `json:"id"`
+	Title    string     `json:"title"`
+	Kind     string     `json:"kind"`
+	Source   string     `json:"source"`
+	StartAt  *time.Time `json:"start_at"`
+	EndAt    *time.Time `json:"end_at"`
+	Finished *bool      `json:"finished"`
+}
+
+type GameCalendar struct {
+	Events     []CalendarEvent `json:"events"`
+	Skipped    int             `json:"skipped"`
+	ServerTime *time.Time      `json:"server_time,omitempty"`
+}
+
+type CustomCalendarEvent struct {
+	CalendarEvent
+	UserID    string    `json:"user_id"`
+	AccountID string    `json:"account_id"`
+	Game      string    `json:"game"`
+	CreatedAt time.Time `json:"created_at"`
 }

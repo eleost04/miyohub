@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -215,4 +216,43 @@ func (s *Service) Note(ctx context.Context, a model.Account, game, uid, region s
 	})
 	result.Game, result.Roles, result.Role = game, roles.Roles, role
 	return result, err
+}
+
+func (s *Service) Calendar(ctx context.Context, a model.Account, game, uid, region string) (model.RecordSnapshot, error) {
+	if !mihoyo.RecordGame(game) || (uid != "" || region != "") && !mihoyo.RecordRoleParameters(uid, region) {
+		return model.RecordSnapshot{}, errors.New("游戏或角色参数无效")
+	}
+	if game == "zzz" {
+		return model.RecordSnapshot{Game: game, Status: "unsupported", Message: "绝区零官方活动日历暂未接入，可添加自定义日程；未发送上游请求"}, nil
+	}
+	roles, role, err := s.roles(ctx, a, game, uid, region)
+	if err != nil || role == nil {
+		return roles, err
+	}
+	result, err := s.read(ctx, a, "calendar:"+game+":"+role.UID+":"+role.Region, 30*time.Minute, func(ctx context.Context) (model.RecordSnapshot, error) {
+		calendar, err := s.client.RecordCalendar(ctx, a, game, *role)
+		return model.RecordSnapshot{Calendar: &calendar}, err
+	})
+	result.Game, result.Roles, result.Role = game, roles.Roles, role
+	return result, err
+}
+
+// Reminders consume an already validated snapshot, never trigger a fresh
+// upstream read, and cannot accept a forged client title or deadline.
+func (s *Service) CalendarEvent(a model.Account, game, id string) (model.CalendarEvent, time.Time, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if e := s.entries[a.ID]; !s.stopped && e != nil && e.identity == identity(a) {
+		for key, snapshot := range e.cache {
+			if !strings.HasPrefix(key, "calendar:"+game+":") || snapshot.Calendar == nil || s.now().Sub(snapshot.ObservedAt) >= 30*time.Minute {
+				continue
+			}
+			for _, event := range snapshot.Calendar.Events {
+				if event.ID == id {
+					return event, snapshot.ObservedAt, nil
+				}
+			}
+		}
+	}
+	return model.CalendarEvent{}, time.Time{}, errors.New("日历快照已失效，请先读取活动后再设置提醒")
 }

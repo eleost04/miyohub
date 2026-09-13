@@ -551,6 +551,7 @@ func (s *Store) DeleteUser(id string) error {
 	}
 	s.data.Users = append(s.data.Users[:index], s.data.Users[index+1:]...)
 	delete(s.data.UserPush, id)
+	s.removeCalendarLocked(id, "")
 	delete(s.data.UserCaptcha, id)
 	delete(s.data.CaptchaActivity, id)
 	delete(s.data.CaptchaProbes, id)

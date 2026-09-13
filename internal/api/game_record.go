@@ -10,6 +10,12 @@ import (
 )
 
 func (s *Server) gameNote(w http.ResponseWriter, r *http.Request, user model.User) {
+	s.gameRecord(w, r, user, false)
+}
+func (s *Server) gameCalendar(w http.ResponseWriter, r *http.Request, user model.User) {
+	s.gameRecord(w, r, user, true)
+}
+func (s *Server) gameRecord(w http.ResponseWriter, r *http.Request, user model.User, calendar bool) {
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w)
 		return
@@ -21,7 +27,7 @@ func (s *Server) gameNote(w http.ResponseWriter, r *http.Request, user model.Use
 	query := r.URL.Query()
 	for key, values := range query {
 		if len(values) != 1 || (key != "account_id" && key != "game" && key != "role_id" && key != "server") {
-			writeError(w, 400, errors.New("便笺查询参数无效"))
+			writeError(w, 400, errors.New("游戏数据查询参数无效"))
 			return
 		}
 	}
@@ -50,7 +56,13 @@ func (s *Server) gameNote(w http.ResponseWriter, r *http.Request, user model.Use
 			return
 		}
 	}
-	result, err := s.records.Note(r.Context(), a, query.Get("game"), query.Get("role_id"), query.Get("server"))
+	var result model.RecordSnapshot
+	var err error
+	if calendar {
+		result, err = s.records.Calendar(r.Context(), a, query.Get("game"), query.Get("role_id"), query.Get("server"))
+	} else {
+		result, err = s.records.Note(r.Context(), a, query.Get("game"), query.Get("role_id"), query.Get("server"))
+	}
 	if err != nil {
 		writeError(w, 400, err)
 		return

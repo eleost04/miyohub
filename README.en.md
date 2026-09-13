@@ -120,6 +120,12 @@ Import shows a five-minute preview before explicit confirmation. Existing UIDs o
 
 Notes are cached for 3 minutes and roles for 15 minutes. Requests for an account are serialized with a minimum 3-second gap. Opening a page, global status polling and hidden tabs never poll upstream notes. Verification responses pause that account's record queries for 6 hours in the current process, including after game or credential changes; rate limits respect `Retry-After`. Stale snapshots are labeled explicitly. Queries reuse the configured outbound proxy and existing device identity, without automatic device registration, credential renewal or CAPTCHA solving. Enable records/notes and complete verification in the official client. These safeguards reduce request pressure, but cannot guarantee freedom from upstream restrictions. This feature is not included in published `0.1.0-beta.3`.
 
+## Development preview: event and version calendar
+
+**Event calendar** reads published Genshin Impact and Honkai: Star Rail banners, limited-time events and challenges on demand. Results are cached for 30 minutes and share account-level cooldowns with notes. Seconds and milliseconds are parsed explicitly; missing start dates or completion states are not guessed, and malformed items are reported as omitted. The official ZZZ activity endpoint is not integrated yet.
+
+All three games support owner-local custom schedules for announced version updates and similar dates. The selected timezone is explicit; the server validates ordering and a one-year date range, with at most 100 custom items per user. Custom items are labeled as user-entered, never presented as official data or silently updated. Deleting an account removes its calendar entries. This feature is not included in published `0.1.0-beta.3`.
+
 ## 🤝 Contributing
 
 

@@ -27,17 +27,19 @@ const ProfilePanel = defineAsyncComponent({ ...pageLoadOptions, loader: () => im
 const OnboardingGuide = defineAsyncComponent({ ...pageLoadOptions, loader: () => import('./components/OnboardingGuide.vue') })
 const ChangelogPanel = defineAsyncComponent({ ...pageLoadOptions, loader: () => import('./components/ChangelogPanel.vue') })
 const GameNotesPanel = defineAsyncComponent({ ...pageLoadOptions, loader: () => import('./components/GameNotesPanel.vue') })
+const CalendarPanel = defineAsyncComponent({ ...pageLoadOptions, loader: () => import('./components/CalendarPanel.vue') })
 
 const auth = ref<AuthStatus | null>(null), user = ref<User | null>(null), config = ref<Config | null>(null)
 const serverVersion = ref('')
 const status = ref<Status>({ running: false, logs: [] })
 const mode = ref<'login' | 'setup' | 'register'>('login')
-type View = 'dashboard' | 'shop' | 'notes' | 'notifications' | 'captcha' | 'logs' | 'settings' | 'profile' | 'admin' | 'changelog'
+type View = 'dashboard' | 'shop' | 'notes' | 'calendar' | 'notifications' | 'captcha' | 'logs' | 'settings' | 'profile' | 'admin' | 'changelog'
 const view = ref<View>('dashboard')
 const navigation = computed(() => [
   { key: 'dashboard' as View, icon: 'home', label: '任务总览', group: '任务管理' },
   { key: 'shop' as View, icon: 'gift', label: '商品兑换', group: '任务管理' },
   { key: 'notes' as View, icon: 'activity', label: '游戏便笺', group: '任务管理' },
+  { key: 'calendar' as View, icon: 'clock', label: '活动日历', group: '任务管理' },
   { key: 'logs' as View, icon: 'activity', label: '运行日志', group: '任务管理' },
   { key: 'notifications' as View, icon: 'bell', label: '消息推送', group: '个人服务' },
   { key: 'captcha' as View, icon: 'shield', label: '打码服务', group: '个人服务' },
@@ -47,7 +49,7 @@ const navigation = computed(() => [
 ])
 const mobileNavigation = computed(() => navigation.value.filter(item => ['dashboard', 'shop', 'notifications'].includes(item.key)))
 const moreItems = computed(() => navigation.value.filter(item => !mobileNavigation.value.some(primary => primary.key === item.key)))
-const pageDescriptions: Record<View, string> = { dashboard: '查看账号状态，配置并执行签到任务。', shop: '浏览米游币商品，管理兑换预约与结果。', notes: '按需查看游戏体力与日常进度。', notifications: '配置签到、兑换结果的通知渠道。', captcha: '选择个人打码渠道或已获授权的站点服务。', logs: '查看任务执行记录与异常原因。', settings: '管理站点运行、每日调度与公共基础服务。', profile: '管理站点登录账号与密码。', admin: '管理用户、服务权限与邀请码。', changelog: '查看版本、功能改动和关联提交。' }
+const pageDescriptions: Record<View, string> = { dashboard: '查看账号状态，配置并执行签到任务。', shop: '浏览米游币商品，管理兑换预约与结果。', notes: '按需查看游戏体力与日常进度。', calendar: '查看活动时间，记录已公告的版本日程。', notifications: '配置签到、兑换结果的通知渠道。', captcha: '选择个人打码渠道或已获授权的站点服务。', logs: '查看任务执行记录与异常原因。', settings: '管理站点运行、每日调度与公共基础服务。', profile: '管理站点登录账号与密码。', admin: '管理用户、服务权限与邀请码。', changelog: '查看版本、功能改动和关联提交。' }
 const pushPanel = ref<InstanceType<typeof PushPanel> | null>(null), captchaPanel = ref<InstanceType<typeof CaptchaPanel> | null>(null), settingsPanel = ref<InstanceType<typeof SettingsPanel> | null>(null)
 const moreNavigation = ref(false), pendingView = ref<View | null>(null)
 const taskAccount = ref<Account | null>(null), selectTaskAccount = ref(false)
@@ -249,6 +251,7 @@ onUnmounted(() => { disposeHistory(); window.removeEventListener('miyohub:unauth
       <PushPanel v-else-if="view === 'notifications'" ref="pushPanel" :timezone="timezone" />
       <CaptchaPanel v-else-if="view === 'captcha'" ref="captchaPanel" :user="user" />
       <GameNotesPanel v-else-if="view === 'notes' && config" :accounts="config.accounts" :timezone="timezone" />
+      <CalendarPanel v-else-if="view === 'calendar' && config" :accounts="config.accounts" :timezone="timezone" />
       <ActivityPanel v-else-if="view === 'logs'" :logs="status.logs" :running="status.running" :timezone="timezone" />
       <SettingsPanel v-else-if="view === 'settings' && config && user.role === 'admin'" ref="settingsPanel" :config="config" :admin="true" @saved="safeRefresh" @navigate="navigate" />
       <ProfilePanel v-else-if="view === 'profile'" :user="user" @guide="openGuide" @changed="safeRefresh" />

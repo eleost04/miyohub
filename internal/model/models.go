@@ -16,6 +16,7 @@ type State struct {
 	CaptchaActivity  map[string][]CaptchaAttempt  `json:"captcha_activity,omitempty"`
 	CaptchaProbes    map[string]CaptchaProbe      `json:"captcha_probes,omitempty"`
 	PushDeliveries   []PushDelivery               `json:"push_deliveries"`
+	CalendarEvents   []CustomCalendarEvent        `json:"calendar_events,omitempty"`
 }
 
 type Config struct {

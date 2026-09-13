@@ -263,6 +263,7 @@ func (s *Store) DeleteAccount(user model.User, id string) error {
 			}
 		}
 		s.data.Config.Shop.Plans = plans
+		s.removeCalendarLocked("", id)
 		return s.saveLocked()
 	}
 	return errors.New("账号不存在或无权访问")
