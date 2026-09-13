@@ -108,6 +108,12 @@ The `develop` branch adds **Dashboard → Accounts → Groups and batch actions*
 
 Group labels are local to each site user; an empty label removes membership. Missing, unauthorized, or stale account settings reject the entire batch without partial writes.
 
+## Development preview: encrypted account migration
+
+**Profile → Account migration** transfers your own accounts, groups and task settings between trusted deployments (up to 100 accounts). Export requires your current site password and a separate transfer passphrase of at least 12 characters. Files use PBKDF2-SHA256 (600,000 iterations) and AES-256-GCM. Keep the passphrase separate from the file and import only into a trusted HTTPS instance.
+
+Import shows a five-minute preview before explicit confirmation. Existing UIDs or duplicate names are skipped, never overwritten. New accounts are disabled with automatic tasks turned off until reviewed. Site permissions, sessions, logs, solver/push secrets and redemption plans are excluded. Export does not stop the original deployment: disable its corresponding tasks before switching to avoid duplicate work. This is file migration, not ongoing synchronization; it is not included in the published `0.1.0-beta.3`.
+
 ## 🤝 Contributing
 
 

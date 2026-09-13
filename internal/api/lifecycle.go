@@ -5,6 +5,7 @@ func (s *Server) cancelAccountWork(id string) {
 	s.exchange.CancelAccount(id)
 }
 func (s *Server) cancelUserWork(id string) {
+	s.archives.cancel(id, "")
 	s.probes.cancelUser(id)
 	s.qr.Cancel(id)
 	s.sms.Cancel(id)

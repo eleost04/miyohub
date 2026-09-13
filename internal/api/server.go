@@ -38,6 +38,7 @@ type Server struct {
 	weixin       *notify.WeixinMonitor
 	qqbot        *notify.QQMonitor
 	probes       captchaProbes
+	archives     archiveSessions
 }
 
 func NewServer(s *store.Store) *Server { return NewServerWithOptions(s, Options{}) }
@@ -90,6 +91,7 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Stop() {
+	s.archives.clear()
 	s.personal.Stop()
 	s.probes.stop()
 	s.runner.Stop()
@@ -115,6 +117,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/auth/password", s.withAuth(s.changePassword))
 	mux.HandleFunc("/api/v1/auth/me", s.withAuth(s.me))
 	mux.HandleFunc("/api/v1/profile/onboarding", s.withAuth(s.onboarding))
+	mux.HandleFunc("/api/v1/profile/archive/export", s.withAuth(s.archiveExport))
+	mux.HandleFunc("/api/v1/profile/archive/preview", s.withAuth(s.archivePreview))
+	mux.HandleFunc("/api/v1/profile/archive/import", s.withAuth(s.archiveImport))
 	mux.HandleFunc("/api/v1/admin/users", s.withAuth(s.adminUsers))
 	mux.HandleFunc("/api/v1/admin/users/status", s.withAuth(s.adminUserStatus))
 	mux.HandleFunc("/api/v1/admin/users/role", s.withAuth(s.adminUserRole))

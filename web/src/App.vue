@@ -248,7 +248,7 @@ onUnmounted(() => { disposeHistory(); window.removeEventListener('miyohub:unauth
       <CaptchaPanel v-else-if="view === 'captcha'" ref="captchaPanel" :user="user" />
       <ActivityPanel v-else-if="view === 'logs'" :logs="status.logs" :running="status.running" :timezone="timezone" />
       <SettingsPanel v-else-if="view === 'settings' && config && user.role === 'admin'" ref="settingsPanel" :config="config" :admin="true" @saved="safeRefresh" @navigate="navigate" />
-      <ProfilePanel v-else-if="view === 'profile'" :user="user" @guide="openGuide" />
+      <ProfilePanel v-else-if="view === 'profile'" :user="user" @guide="openGuide" @changed="safeRefresh" />
       <AdminPanel v-else-if="view === 'admin' && user.role === 'admin'" :user="user" :timezone="timezone" />
       <ChangelogPanel v-else-if="view === 'changelog'" :server-version="serverVersion" />
       <div v-else class="panel empty"><p>正在加载控制台…</p><button class="small-button" @click="safeRefresh">重新加载</button></div>
