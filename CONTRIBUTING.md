@@ -57,7 +57,7 @@ Risk: Actual permission revocation must still stop further requests.
 
 `0.x` 的不兼容变更至少递增次版本并提供迁移说明；`1.0.0` 之后不兼容变更递增主版本。不是每次提交都改版本号；一个发布周期统一版本。新增功能与修复同时交付时，采用其中最高级别的版本递增。
 
-当前稳定基线为 `0.0.1`，已发布测试版为 `0.1.0-beta.1`；本轮任务 / 兑换修复与独立社区执行目标为 `0.1.0-beta.2`。一批改动验证完成后统一迭代版本，真实短信风控和客户端兼容性验收后再推进正式版。验证码服务只有自身代码或协议变化时才递增版本，不跟随主站机械改号。
+当前稳定基线为 `0.0.1`，已发布测试版为 `0.1.0-beta.3`。`beta.2` 标签与镜像保留，因 Release 暴露隔离代理测试的竞态，修复已通过新版本的完整验证；不覆盖旧标签，也不将测试夹具修复表述为代理业务修复。实际安装包状态以 GitHub Releases 为准。真实短信风控和客户端兼容性验收后再推进正式版。验证码服务只有自身代码或协议变化时才递增版本，不跟随主站机械改号。
 
 ## 验证门槛
 
@@ -76,6 +76,7 @@ CI 是验证流水线，不是提交类型或目标分支：用户功能使用 `
 - Beta/RC 标签指向 `develop` 的已验证提交；正式标签必须属于 `main`。签名、版本、分支归属和测试任一未通过，不生成 Release。
 - 发布前更新 README 的使用变化、看板状态和更新日志。更新日志只链接当前发布历史内的真实提交，不虚构编号，不把待验收项写成已完成。
 - Actions 支持手动运行 `Build and test`；恢复发布时运行 `Publish signed release`，填写已存在的签名标签。禁止借恢复流程跳过检查或覆盖已有版本。
+- 发布检查失败时先定位原因。源码或测试需要修复就使用新版本与新签名标签；只有确认是环境 / 下载等临时故障时才重跑原标签，不能反复重跑来掩盖竞态或断言失败。
 - 部署前避开运行中的任务及临近兑换，成对备份加密状态和密钥，保留旧镜像；升级不使用 `docker compose down -v`。
 - 仅推送明确的分支与标签，不使用 `--all` / `--mirror`。开发镜像由 `develop` 的完整 CI 通过后发布，需显式启用 `MIYOHUB_PUBLISH_DEV_IMAGE`；保留私有仓库 / 包校验及源码签名门槛。PR 不发布镜像，不上传运行数据或验证码模型；修改分发范围需再次核实授权。
 - 开发镜像使用 `develop` 和完整提交 SHA 标签；严格锁定用 Actions 记录的 digest。连续 `develop` 流水线串行完成，避免旧镜像晚于新镜像覆盖跟踪标签；普通 PR 可取消过期 CI。
@@ -88,6 +89,6 @@ CI 是验证流水线，不是提交类型或目标分支：用户功能使用 `
 
 ## English maintainer summary
 
-Clone `develop` for contribution (`git clone --branch develop https://github.com/eleost04/miyohub.git`); a normal clone defaults to the stable `main` baseline. Use focused branches and signed Conventional Commits (`fix`, `feat`, `docs`, etc.) with a body explaining the change and tests. Push each verified change to its topic branch, then integrate through a PR to `develop`; CI is the validation pipeline, not the commit type or target branch. Release stable versions from `main`. SemVer patch versions fix bugs, minor versions add features, and `-beta.N` / `-rc.N` mark pre-releases. Batch validated changes into a version; the current cycle targets `0.1.0-beta.2`.
+Clone `develop` for contribution (`git clone --branch develop https://github.com/eleost04/miyohub.git`); a normal clone defaults to the stable `main` baseline. Use focused branches and signed Conventional Commits (`fix`, `feat`, `docs`, etc.) with a body explaining the change and tests. Push each verified change to its topic branch, then integrate through a PR to `develop`; CI is the validation pipeline, not the commit type or target branch. Release stable versions from `main`. SemVer patch versions fix bugs, minor versions add features, and `-beta.N` / `-rc.N` mark pre-releases. Batch validated changes into a version; the latest published prerelease is `0.1.0-beta.3`. The beta.2 tag was retained after its release-gate failure, and the fixture fix passed verification under a new signed tag; never hide a race by retrying until green.
 
 Keep the roadmap and real commit-linked changelog current. Run isolated Go/browser tests and privacy checks; never use live accounts for automated tests. Verify signed tags before releasing, never rewrite published release tags, and preserve paired state/key backups for rollback. Production data and third-party models are never repository contents.
