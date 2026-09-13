@@ -130,6 +130,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/accounts", s.withAuth(s.accounts))
 	mux.HandleFunc("/api/v1/accounts/check", s.withAuth(s.accountCheck))
 	mux.HandleFunc("/api/v1/accounts/tasks", s.withAuth(s.accountTasks))
+	mux.HandleFunc("/api/v1/accounts/batch", s.withAuth(s.accountBatch))
 	mux.HandleFunc("/api/v1/captcha/config", s.withAuth(s.captchaConfig))
 	mux.HandleFunc("/api/v1/captcha/test", s.withAuth(s.captchaTest))
 	mux.HandleFunc("/api/v1/push/test", s.withAuth(s.pushTest))

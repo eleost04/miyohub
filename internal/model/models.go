@@ -48,6 +48,7 @@ type Account struct {
 	ID              string                 `json:"id"`
 	UserID          string                 `json:"user_id"`
 	Name            string                 `json:"name"`
+	Group           string                 `json:"group,omitempty"`
 	Cookie          string                 `json:"cookie"`
 	Stuid           string                 `json:"stuid"`
 	Stoken          string                 `json:"stoken"`

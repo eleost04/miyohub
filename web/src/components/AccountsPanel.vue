@@ -1,16 +1,23 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { api } from '../api'
 import { formatDate } from '../time'
 import type { Account, TaskProgress } from '../types'
 import AppIcon from './AppIcon.vue'
 import ModalShell from './ModalShell.vue'
 import FloatingSave from './FloatingSave.vue'
+import PageLoading from './PageLoading.vue'
+import PageLoadError from './PageLoadError.vue'
 import { accountTasks, hasTasks, taskNames } from '../taskSettings'
 import { alreadyComplete, resultLabel } from '../taskResults'
 
 const props = defineProps<{ accounts: Account[]; tasks: TaskProgress[]; userId: string; enabled: boolean; timezone: string; actionBusy: boolean }>()
-const emit = defineEmits<{ changed: []; bind: [account?: Account]; configure: [account: Account]; run: [id: string]; stop: [id: string] }>()
+const emit = defineEmits<{ changed: []; bind: [account?: Account]; configure: [account: Account]; run: [id: string]; batchRun: [ids: string[]]; stop: [id: string] }>()
+const AccountBatchModal = defineAsyncComponent({ loader: () => import('./AccountBatchModal.vue'), loadingComponent: PageLoading, errorComponent: PageLoadError, delay: 150, timeout: 30000 })
+const batchOpen = ref(false), groupFilter = ref<string | null>(null)
+const groups = computed(() => [...new Set(props.accounts.map(a => a.group || '').filter(Boolean))].sort())
+const visibleAccounts = computed(() => props.accounts.filter(a => groupFilter.value === null || (a.group || '') === groupFilter.value))
+watch(groups, values => { if (groupFilter.value && !values.includes(groupFilter.value)) groupFilter.value = null })
 const editing = ref(false), busy = ref(false), error = ref(''), notice = ref(''), deleteID = ref('')
 const draft = ref({ id: '', name: '', disabled: false, cookie: '', stoken: '', mid: '', cloud_tokens: { genshin: '', zzz: '' }, clear_cloud_tokens: [] as string[] })
 const source = ref<Account | null>(null)
@@ -45,8 +52,9 @@ function rebind(a: Account) { emit('bind', a) }
   <article class="panel accounts-panel">
     <div class="panel-title"><div><p class="eyebrow">账号管理</p><h2>米游社账号 <span class="count-label">{{ accounts.length }}</span></h2></div><button class="small-button primary-mini" @click="emit('bind')"><AppIcon name="plus" :size="14" />绑定账号</button></div>
     <p v-if="error && !editing" class="error-banner" role="alert">{{ error }}</p><p v-if="notice" class="notice" role="status">{{ notice }}</p>
+    <div v-if="groups.length" class="account-group-filters" role="group" aria-label="账号分组"><button class="small-button" :aria-pressed="groupFilter === null" @click="groupFilter = null">全部</button><button class="small-button" :aria-pressed="groupFilter === ''" @click="groupFilter = ''">未分组</button><button v-for="group in groups" :key="group" class="small-button" :aria-pressed="groupFilter === group" @click="groupFilter = group">{{ group }}</button></div>
     <div class="account-list">
-      <section v-for="a in accounts" :key="a.id" class="account-card" :class="{ 'account-working': progress(a), 'account-disabled': a.disabled }">
+      <section v-for="a in visibleAccounts" :key="a.id" class="account-card" :class="{ 'account-working': progress(a), 'account-disabled': a.disabled }">
         <div class="account-heading"><span class="account-avatar">{{ a.name.slice(0, 1).toUpperCase() }}</span><div class="account-identity"><strong>{{ a.name }}</strong><small>米游社 UID {{ a.stuid || '待识别' }}</small></div><span class="pill" :class="{ soft: a.status === 'valid' && !a.disabled, warning: ['expired', 'check_failed'].includes(a.status) }">{{ statusLabel(a) }}</span></div>
         <div v-if="progress(a)" class="account-progress" role="status"><span class="loading-orbit small"></span><span>{{ progress(a)?.current }}</span><small>{{ progress(a)?.state === 'queued' ? '排队中' : '进行中' }}</small></div>
         <p v-else class="account-last-run">{{ a.last_task_at && !a.last_task_at.startsWith('0001') ? '最近执行 · ' + formatDate(a.last_task_at, timezone) : '准备就绪，开始第一次签到吧' }}</p>
@@ -65,8 +73,11 @@ function rebind(a: Account) { emit('bind', a) }
       </section>
       <div v-if="!accounts.length" class="empty rich-empty"><AppIcon name="scan" :size="34" /><p>尚未绑定米游社账号</p><small>支持扫码登录、短信登录或手动填写凭据。</small><button class="small-button" @click="emit('bind')">添加米游社账号<AppIcon name="arrow" :size="14" /></button></div>
     </div>
-    <button class="text-button manual-add" @click="edit()">已有 Cookie？手动添加账号</button>
+    <p v-if="accounts.length && !visibleAccounts.length" class="muted">这个分组暂无账号。<button class="text-button" @click="groupFilter = null">查看全部</button></p>
+    <div class="account-tools"><button class="text-button manual-add" @click="edit()">已有 Cookie？手动添加账号</button><button v-if="accounts.length" class="text-button" @click="batchOpen = true"><AppIcon name="filter" :size="14" />分组与批量</button></div>
   </article>
+
+  <AccountBatchModal v-if="batchOpen" :accounts="accounts" :initial-group="groupFilter" :enabled="enabled" :action-busy="actionBusy" :timezone="timezone" @close="batchOpen = false" @changed="groupFilter = null; notice = '批量设置已保存'; emit('changed')" @run="ids => emit('batchRun', ids)" />
 
   <ModalShell v-if="editing" :title="draft.id ? '管理账号' : '手动添加账号'" :busy="busy" wide @close="editing = false">
     <form @submit.prevent="save">
@@ -79,3 +90,7 @@ function rebind(a: Account) { emit('bind', a) }
     </form>
   </ModalShell>
 </template>
+
+<style scoped>
+.account-group-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}.account-group-filters button{max-width:100%;overflow-wrap:anywhere}.account-group-filters [aria-pressed=true]{background:#e7ecdf;color:#485a3d;border-color:#c7d1bb}.account-tools{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-top:15px}.account-tools .manual-add{margin:0}
+</style>

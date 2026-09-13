@@ -102,7 +102,14 @@ Adjust key deployment options in `.env`:
 
 ---
 
+## Development preview: account groups and batch actions
+
+The `develop` branch adds **Dashboard → Accounts → Groups and batch actions**; the published `0.1.0-beta.3` does not include this feature. Filter your own accounts by group and update up to 50 accounts in one transaction: group, automatic check-in, individual schedule, or enabled state. Changing a schedule only affects future scheduling; it neither starts a run nor changes selected games. Individual settings can still be adjusted afterwards. **Run selected accounts** is an explicit action and retains the existing queue and request pacing.
+
+Group labels are local to each site user; an empty label removes membership. Missing, unauthorized, or stale account settings reject the entire batch without partial writes.
+
 ## 🤝 Contributing
+
 
 Contributions, issues, and feature requests are welcome!
 Please check the [Contributing Guidelines (CONTRIBUTING.md)](CONTRIBUTING.md) before submitting pull requests.
