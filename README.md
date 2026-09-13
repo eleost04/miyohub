@@ -2,7 +2,7 @@
 
 [English](README.en.md) · 当前版本：**0.0.1**
 
-[功能看板](ROADMAP.md) · [参与开发与维护规范](CONTRIBUTING.md) · [问题反馈](https://github.com/eleost04/miyohub/issues)
+[功能看板](ROADMAP.md) · [参与开发与维护规范](CONTRIBUTING.md) · [问题反馈](https://github.com/eleost04/miyohub/issues) · [安全政策](.github/SECURITY.md)
 
 自部署的米游社签到、米游币任务与商品兑换管理。Go + Vue 3，非米哈游官方产品；上游接口、账号风控和商品库存可能变化，不保证奖励到账或兑换成功。
 
@@ -16,6 +16,12 @@
 - 手机与桌面适配选择器、分层返回、偏好自动保存、按需悬浮保存、可关闭的新手引导、SVG 图标和关联提交的更新日志。
 
 站点用户是权限边界：管理员也不能在日常页面访问其他用户的米游社账号、私人日志和兑换计划。用户管理与系统设置分别在独立页面。
+
+## 稳定版与开发分支
+
+本分支保留 `0.0.1` 稳定应用代码，同时更新仓库文档和验证规则。Beta 的功能、配置变化及开发镜像见 [develop 说明](https://github.com/eleost04/miyohub/blob/develop/README.md)、[功能看板](ROADMAP.md) 和 [Releases](https://github.com/eleost04/miyohub/releases)，不要将本页的稳定版参数与 Beta 的 Compose 文件混用。
+
+参与开发请使用 `git clone --branch develop https://github.com/eleost04/miyohub.git`；已有完整克隆先 `git fetch origin develop`，再 `git switch develop`，随后创建 `fix/<主题>` 或 `feat/<主题>` 分支。
 
 ## 快速开始
 
@@ -35,6 +41,36 @@ curl -fsS http://127.0.0.1:5890/api/v1/health
 容器名为 `miyohub`，数据卷为 `miyohub_miyohub-data`，网络为 `miyohub_default`。根文件系统只读、非 root 运行。不要使用 `docker compose down -v` 更新，它会删除账号数据卷。
 
 另一个可选项目 [miyohub-captcha](https://github.com/eleost04/miyohub-captcha) 提供本机 CPU 验证码服务；不需要自建服务时可只部署主站。
+
+## 环境变量
+
+Compose 从项目目录的 `.env` 读取下列部署变量；复制 `.env.example` 后按需修改，建议 `chmod 600 .env`。只提交示例，不提交实际配置。裸程序**不会自动加载 `.env`**，请通过进程环境或 CLI 参数传入。
+
+| 变量 | 默认值 | 作用 / 注意事项 |
+| --- | --- | --- |
+| `MIYOHUB_BIND_ADDR` | `127.0.0.1` | 仅 Compose：宿主机监听地址；公网反代建议保持回环 |
+| `MIYOHUB_HTTP_PORT` | `5890` | 仅 Compose：宿主机映射端口；不改变容器内部端口 |
+| `MIYOHUB_PUBLIC_ORIGIN` | 空 | 浏览器访问的完整来源，如 `https://miyohub.example.com`；无路径，需与协议 / 主机 / 端口一致 |
+| `MIYOHUB_SECURE_COOKIE` | `false` | HTTPS 部署设为 `true`；启用后 Cookie 仅通过 HTTPS 发送，纯 HTTP 本地访问不要开启 |
+| `MIYOHUB_PUSH_ALLOW_PRIVATE` | `false` | `true` 允许**所有站点用户**的推送渠道访问私网 / 回环；只用于完全可信的部署，不建议多用户公网服务开启 |
+
+布尔值只有小写 `true` 才启用。修改 Compose 环境后用 `docker compose up -d --force-recreate` 重建容器；`docker compose restart` 不会更新环境。
+
+直接运行二进制 / `go run` 另支持以下变量；CLI 同名用途的参数优先：
+
+| 变量 | 裸程序默认值 | 对应 CLI 参数 / 容器行为 |
+| --- | --- | --- |
+| `MIYOHUB_HOST` | `127.0.0.1` | `--host`；镜像内部默认 `0.0.0.0` |
+| `MIYOHUB_PORT` | `5890` | `--port`；Compose 内部健康检查使用此默认端口 |
+| `MIYOHUB_DATA_DIR` | `data` | `--data-dir`；镜像内部为持久卷 `/data`，必须同时保留状态和密钥 |
+| `MIYOHUB_WEB_DIR` | `web/dist` | `--web-dir`；相对于工作目录，镜像中为 `/app/web/dist` |
+
+```bash
+MIYOHUB_HOST=127.0.0.1 MIYOHUB_PORT=5890 MIYOHUB_DATA_DIR=./data \
+  go run ./cmd/miyohub serve --web-dir ./web/dist
+```
+
+把裸程序专用变量写入 Compose 的 `.env` 并不会自动传进容器，现有 Compose 只传递表中声明的部署变量。账号凭据、签到时间、打码与推送密钥通过网页配置；本项目不支持用 `MIYOHUB_ADMIN_PASSWORD` 或 Cookie 环境变量创建用户。`0.0.1` 不提供网页代理配置或 `MIYOHUB_IMAGE` 镜像选择变量；这些开发版能力请按目标版本的说明和 Compose 文件配置。
 
 ## HTTPS 与 Caddy
 
@@ -117,7 +153,7 @@ miyohub.example.com {
 
 两者同机建议至少 2 核 / 2 GiB，可用磁盘预留 3 GiB 以上；本机构建建议 4 GiB RAM 和 5 GiB 以上可用磁盘，构建缓存、备份及日志另计。空闲样本不是容量上限，高并发与复杂验证需要更多余量。打码服务固定单 worker，不能简单增加 worker 数。
 
-当前发布流程提供源码与 Linux 安装包，**不自动上传 Docker 镜像**。镜像分发应使用明确版本标签并保留回滚版本；打码镜像的第三方运行代码及模型需另外核实使用和再分发许可。
+稳定标签发布流程提供源码与 Linux 安装包。`develop` 另有通过完整 CI 与签名校验后发布私有开发镜像的流程，配置及状态见 [开发版镜像说明](https://github.com/eleost04/miyohub/blob/develop/README.md#开发镜像自动更新)。镜像发布不自动重启生产容器；使用开发镜像时一并检查目标版本的 Compose / 环境配置。打码镜像和模型不随主站上传，需另外核实第三方许可。
 
 ## 更新、备份与日志
 
@@ -152,6 +188,8 @@ npm run test:e2e
 贡献流程、`fix` / `feat` 提交规则、GPG 签名、分支职责、版本递增和发布检查见 [CONTRIBUTING.md](CONTRIBUTING.md)。功能范围、已知问题及与参考项目的差异见 [ROADMAP.md](ROADMAP.md)。站内「更新日志」记录面向用户的改动。
 
 发布流程检查签名标签和分支归属，构建包含前端资源的 Linux amd64 / arm64 安装包；arm64 仅交叉构建，尚未进行硬件验收。Actions 的测试与发布工作流均支持手动恢复，不跳过检查，不覆盖已有 Release。
+
+GitHub Actions 不运行账号签到、兑换或推送，也不需要账号状态和密钥。自动任务由自己的 Docker 主机 / 服务器执行。`main` / `develop` 推送、目标为这两个分支的 PR 和手动触发会运行 CI；纯文档仍做隐私与仓库检查，但跳过 Go / 浏览器 / 镜像构建。每个小改动先本地验证、签名提交并推送，再通过 PR 集成。
 
 Git 保留源码、必要测试、依赖锁文件、构建 / CI 配置和双语 README。排除 `.env*`（示例除外）、`data/`、状态及密钥、`docs/`、备份、日志、依赖目录、构建产物、浏览器测试报告和压缩归档；伴随打码仓库还排除 `models/`、`upstream/` 和验证码图片。版本流程扫描提交历史中的凭据；不要用忽略规则代替提交前检查。
 

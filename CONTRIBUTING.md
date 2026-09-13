@@ -2,6 +2,8 @@
 
 本规范适用于 MiyoHub；验证码服务独立发布，但采用相同的提交、审查和安全规则。功能进度以 [ROADMAP.md](ROADMAP.md) 为准，面向用户的改动维护在 `web/src/releases.json`。
 
+开发入口是 `develop`，不是稳定基线 `main`。首次参与可用 `git clone --branch develop https://github.com/eleost04/miyohub.git`；已有完整克隆先 `git fetch origin develop`，再 `git switch develop`，然后从最新开发分支创建自己的短期分支。
+
 ## 一次只交付一个可验证的改动
 
 1. 在看板登记问题、影响范围、目标版本及验收条件。先区分上游限制、环境问题与项目缺陷。
@@ -55,11 +57,15 @@ Risk: Actual permission revocation must still stop further requests.
 
 `0.x` 的不兼容变更至少递增次版本并提供迁移说明；`1.0.0` 之后不兼容变更递增主版本。不是每次提交都改版本号；一个发布周期统一版本。新增功能与修复同时交付时，采用其中最高级别的版本递增。
 
-当前基线为 `0.0.1`。本轮包含代理等新增功能，目标为 `0.1.0-beta.1`；真实短信风控和客户端兼容性验收后再推进正式版。验证码服务只有自身代码或协议变化时才递增版本，不跟随主站机械改号。
+当前稳定基线为 `0.0.1`，已发布测试版为 `0.1.0-beta.1`；本轮任务 / 兑换修复与独立社区执行目标为 `0.1.0-beta.2`。一批改动验证完成后统一迭代版本，真实短信风控和客户端兼容性验收后再推进正式版。验证码服务只有自身代码或协议变化时才递增版本，不跟随主站机械改号。
 
 ## 验证门槛
 
 后端：`go test -race ./...`、`go vet ./...`。流程与仓库边界：`node --test scripts/*.test.mjs`、`node scripts/check-version.mjs`、`node scripts/check-repository.mjs`。前端：`npm --prefix web ci`、`npm --prefix web run build`，然后在 `web` 目录运行 `npx playwright test`。
+
+CI 是验证流水线，不是提交类型或目标分支：用户功能使用 `feat`，修复用 `fix`，文档用 `docs`；只有修改工作流才用 `ci`。每个小改动本地验证成功后立即签名提交并推送自己的特性分支，准备集成时提出面向 `develop` 的 PR。`main` / `develop` 的推送与 PR 保留自动 CI；纯文档改动只运行仓库、版本与凭据检查，手动 CI 始终运行完整验证。
+
+不提供 GitHub 签到工作流，不将账号状态、Cookie 或加密密钥放入 Actions Secrets。签到、兑换和推送仅由自有主机运行；CI / Release 使用隔离模拟数据。修改工作流时固定第三方 Action 的完整提交 SHA，并核对来源，保持最小权限，不使用 `pull_request_target` 执行贡献者代码。
 
 浏览器测试使用独立临时状态及原有鉴权，不关闭生产限流，不复用生产账号。至少覆盖 320/390 像素手机及桌面布局，检查弹窗、返回、自动保存、键盘操作和首屏资源预算。
 
@@ -71,7 +77,8 @@ Risk: Actual permission revocation must still stop further requests.
 - 发布前更新 README 的使用变化、看板状态和更新日志。更新日志只链接当前发布历史内的真实提交，不虚构编号，不把待验收项写成已完成。
 - Actions 支持手动运行 `Build and test`；恢复发布时运行 `Publish signed release`，填写已存在的签名标签。禁止借恢复流程跳过检查或覆盖已有版本。
 - 部署前避开运行中的任务及临近兑换，成对备份加密状态和密钥，保留旧镜像；升级不使用 `docker compose down -v`。
-- 仅推送明确的分支与标签，不使用 `--all` / `--mirror`。镜像上传需另外确认仓库可见性及第三方授权。
+- 仅推送明确的分支与标签，不使用 `--all` / `--mirror`。开发镜像由 `develop` 的完整 CI 通过后发布，需显式启用 `MIYOHUB_PUBLISH_DEV_IMAGE`；保留私有仓库 / 包校验及源码签名门槛。PR 不发布镜像，不上传运行数据或验证码模型；修改分发范围需再次核实授权。
+- 开发镜像使用 `develop` 和完整提交 SHA 标签；严格锁定用 Actions 记录的 digest。连续 `develop` 流水线串行完成，避免旧镜像晚于新镜像覆盖跟踪标签；普通 PR 可取消过期 CI。
 
 ## 安全与工程边界
 
@@ -81,6 +88,6 @@ Risk: Actual permission revocation must still stop further requests.
 
 ## English maintainer summary
 
-Use focused branches and signed Conventional Commits (`fix`, `feat`, `docs`, etc.) with a body explaining the change and tests. Integrate reviewed work through `develop`; release stable versions from `main`. SemVer patch versions fix bugs, minor versions add features, and `-beta.N` / `-rc.N` mark pre-releases. The current feature cycle targets `0.1.0-beta.1`.
+Clone `develop` for contribution (`git clone --branch develop https://github.com/eleost04/miyohub.git`); a normal clone defaults to the stable `main` baseline. Use focused branches and signed Conventional Commits (`fix`, `feat`, `docs`, etc.) with a body explaining the change and tests. Push each verified change to its topic branch, then integrate through a PR to `develop`; CI is the validation pipeline, not the commit type or target branch. Release stable versions from `main`. SemVer patch versions fix bugs, minor versions add features, and `-beta.N` / `-rc.N` mark pre-releases. Batch validated changes into a version; the current cycle targets `0.1.0-beta.2`.
 
 Keep the roadmap and real commit-linked changelog current. Run isolated Go/browser tests and privacy checks; never use live accounts for automated tests. Verify signed tags before releasing, never rewrite published release tags, and preserve paired state/key backups for rollback. Production data and third-party models are never repository contents.
