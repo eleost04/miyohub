@@ -104,7 +104,9 @@ Adjust key deployment options in `.env`:
 
 ## Development preview: account groups and batch actions
 
-The following four features belong to the `0.2.0-beta.1` development snapshot on `feat/account-workspace`, pending a PR into `develop`. This snapshot has not been tagged, released or deployed; `0.1.0-beta.3` remains the latest published preview. Isolated tests do not establish live upstream compatibility or delivery to real devices; see the [roadmap](ROADMAP.md) for limits.
+The current development snapshot is `0.2.0-beta.2` on `feat/account-workspace`, pending [PR #8](https://github.com/eleost04/miyohub/pull/8) into `develop`. It only fixes the oversized logo on loading and authentication screens; its image rebuild is pending. The four features below are already included in the manually published Docker Hub preview `eleost/miyohub:0.2.0-beta.1`, which has passed deployment checks.
+
+This manual preview image supports `linux/amd64` only and does not replace `latest`. The latest GitHub release tag remains `v0.1.0-beta.3`; these new features have not merged into `main` or `develop`. Isolated tests and deployment checks do not establish live upstream compatibility or delivery to real devices; see the [roadmap](ROADMAP.md) for limits.
 
 This snapshot adds **Dashboard → Accounts → Groups and batch actions**. Filter your own accounts by group and update up to 50 accounts in one transaction: group, automatic check-in, individual schedule, or enabled state. Changing a schedule only affects future scheduling; it neither starts a run nor changes selected games. Individual settings can still be adjusted afterwards. **Run selected accounts** is an explicit action and retains the existing queue and request pacing.
 
