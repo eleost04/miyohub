@@ -104,7 +104,7 @@ Adjust key deployment options in `.env`:
 
 ## Development preview: account groups and batch actions
 
-The current development snapshot is `0.2.0-beta.2` on `feat/account-workspace`, pending [PR #8](https://github.com/eleost04/miyohub/pull/8) into `develop`. It only fixes the oversized logo on loading and authentication screens; its image rebuild is pending. The four features below are already included in the manually published Docker Hub preview `eleost/miyohub:0.2.0-beta.1`, which has passed deployment checks.
+The current development snapshot is `0.2.0-beta.2` on `feat/account-workspace`, pending [PR #8](https://github.com/eleost04/miyohub/pull/8) into `develop`. Compared with beta.1, it only fixes the oversized logo on loading and authentication screens. The fix and the four features below are included in the manually published Docker Hub preview `eleost/miyohub:0.2.0-beta.2`, which has passed deployment checks.
 
 This manual preview image supports `linux/amd64` only and does not replace `latest`. The latest GitHub release tag remains `v0.1.0-beta.3`; these new features have not merged into `main` or `develop`. Isolated tests and deployment checks do not establish live upstream compatibility or delivery to real devices; see the [roadmap](ROADMAP.md) for limits.
 

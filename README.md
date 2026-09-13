@@ -104,7 +104,7 @@ volumes:
 
 ## 开发版：账号分组与批量操作
 
-当前开发快照为 `0.2.0-beta.2`，位于 `feat/account-workspace`，待 [PR #8](https://github.com/eleost04/miyohub/pull/8) 合入 `develop`；本次仅修复加载和登录界面 Logo 异常放大，镜像待重建。以下四项新增功能已包含在手动发布的 Docker Hub 预览镜像 `eleost/miyohub:0.2.0-beta.1` 中，并完成部署检查。
+当前开发快照为 `0.2.0-beta.2`，位于 `feat/account-workspace`，待 [PR #8](https://github.com/eleost04/miyohub/pull/8) 合入 `develop`；相较 beta.1，仅修复加载和登录界面 Logo 异常放大。修复与以下四项新增功能已包含在手动发布的 Docker Hub 预览镜像 `eleost/miyohub:0.2.0-beta.2` 中，并完成部署检查。
 
 此手动预览镜像仅支持 `linux/amd64`，没有更新 `latest`；最新 GitHub 发布标签仍为 `v0.1.0-beta.3`，`main` / `develop` 尚未包含本轮新增功能。隔离测试与部署检查不代表真实上游或接收设备已验收，具体范围见[功能看板](ROADMAP.md)。
 
